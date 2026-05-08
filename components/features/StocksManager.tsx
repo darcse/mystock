@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { LogOut, RefreshCw } from "lucide-react";
 import type { LookupState } from "@/app/(routes)/stocks/action-types";
 import { logoutAction } from "@/app/(routes)/login/actions";
 import {
@@ -11,6 +12,7 @@ import {
   toggleStockStatusAction,
 } from "@/app/(routes)/stocks/actions";
 import { StockDrawer } from "@/components/features/StockDrawer";
+import { createClient } from "@/lib/supabase/client";
 import type { StockDashboardItem, StockDrawerDetail, StockStatus } from "@/types/stock";
 
 type StocksManagerProps = {
@@ -35,6 +37,20 @@ export function StocksManager({
   const [ticker, setTicker] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<StockStatus>("watching");
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [krxStocks, setKrxStocks] = useState<
+    Array<{ name: string; market: string; code: string; ticker: string }>
+  >([]);
+  const [searchResults, setSearchResults] = useState<
+    Array<{ name: string; market: string; code: string; ticker: string }>
+  >([]);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [selectedKrxStock, setSelectedKrxStock] = useState<{
+    name: string;
+    market: string;
+    code: string;
+    ticker: string;
+  } | null>(null);
+  const [localizedNames, setLocalizedNames] = useState<Record<string, string>>({});
   const [lookupState, lookupAction, isLookupPending] = useActionState(
     lookupStockAction,
     initialLookupState,
@@ -54,8 +70,135 @@ export function StocksManager({
 
     if (activeLookup) {
       setFeedback(null);
+      setIsSearchOpen(false);
+      setSearchResults([]);
     }
   }, [activeLookup, lookupState]);
+
+  useEffect(() => {
+    if (!selectedKrxStock) {
+      return;
+    }
+
+    if (selectedKrxStock.ticker !== normalizedTicker) {
+      setSelectedKrxStock(null);
+    }
+  }, [normalizedTicker, selectedKrxStock]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch("/krx_stocks.json")
+      .then((response) => response.json())
+      .then((json) => {
+        if (cancelled) {
+          return;
+        }
+
+        const rows = Array.isArray(json)
+          ? json.filter(
+              (item): item is { name: string; market: string; code: string; ticker: string } =>
+                Boolean(
+                  item &&
+                    typeof item === "object" &&
+                    typeof item.name === "string" &&
+                    typeof item.market === "string" &&
+                    typeof item.code === "string" &&
+                    typeof item.ticker === "string",
+                ),
+            )
+          : [];
+
+        setKrxStocks(rows);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setKrxStocks([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const koreanTickers = initialStocks
+      .map((stock) => stock.ticker)
+      .filter((ticker) => /\.(KS|KQ)$/i.test(ticker));
+
+    const missing = koreanTickers.filter((ticker) => !localizedNames[ticker]);
+
+    if (missing.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+
+    Promise.all(
+      missing.slice(0, 10).map(async (ticker) => {
+        try {
+          const query = ticker.replace(/\.(KS|KQ)$/i, "");
+          const response = await fetch(`/api/yahoo/search?q=${encodeURIComponent(query)}`);
+          const json = (await response.json()) as {
+            results?: Array<{ ticker: string; name: string }>;
+          };
+          const name = json.results?.[0]?.name ?? null;
+          if (!name || !/[가-힣]/.test(name)) {
+            return null;
+          }
+          return { ticker, name };
+        } catch {
+          return null;
+        }
+      }),
+    ).then((entries) => {
+      if (cancelled) {
+        return;
+      }
+      const next: Record<string, string> = {};
+      for (const entry of entries) {
+        if (entry) {
+          next[entry.ticker] = entry.name;
+        }
+      }
+      if (Object.keys(next).length > 0) {
+        setLocalizedNames((prev) => ({ ...prev, ...next }));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialStocks, localizedNames]);
+
+  useEffect(() => {
+    if (!ticker.trim()) {
+      setSearchResults([]);
+      setIsSearchOpen(false);
+      return;
+    }
+
+    const query = ticker.trim();
+    const upperQuery = query.toUpperCase();
+    const handle = window.setTimeout(() => {
+      const results = krxStocks
+        .filter(
+          (item) =>
+            item.name.includes(query) ||
+            item.code.includes(query) ||
+            item.ticker.toUpperCase().includes(upperQuery),
+        )
+        .slice(0, 8);
+
+      setSearchResults(results);
+      setIsSearchOpen(true);
+    }, 250);
+
+    return () => {
+      window.clearTimeout(handle);
+    };
+  }, [krxStocks, ticker]);
 
   async function handleSave(status: StockStatus) {
     const formData = new FormData();
@@ -63,6 +206,57 @@ export function StocksManager({
     formData.set("status", status);
 
     startTransition(async () => {
+      const normalizedSaveTicker = (activeLookup?.ticker ?? ticker).trim().toUpperCase();
+      const shouldSaveWithKrxName =
+        Boolean(selectedKrxStock) &&
+        selectedKrxStock?.ticker.toUpperCase() === normalizedSaveTicker &&
+        Boolean(activeLookup);
+
+      if (shouldSaveWithKrxName && selectedKrxStock && activeLookup) {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) {
+          setFeedback("로그인 후 종목을 관리할 수 있습니다.");
+          return;
+        }
+
+        const { data: existingStock } = await supabase
+          .from("stocks")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("ticker", normalizedSaveTicker)
+          .maybeSingle();
+
+        if (existingStock) {
+          setFeedback("이미 등록된 티커입니다.");
+          return;
+        }
+
+        const mergedName = `${selectedKrxStock.name} (${activeLookup.name})`;
+        const { error } = await supabase.from("stocks").insert({
+          market: activeLookup.market,
+          name: mergedName,
+          status,
+          ticker: normalizedSaveTicker,
+          user_id: user.id,
+        });
+
+        if (error) {
+          setFeedback(error.code === "23505" ? "이미 등록된 티커입니다." : "종목 저장에 실패했습니다.");
+          return;
+        }
+
+        setFeedback("종목이 저장되었습니다.");
+        setTicker("");
+        setSelectedKrxStock(null);
+        setSelectedStatus("watching");
+        router.refresh();
+        return;
+      }
+
       const result = await createStockAction(formData);
 
       setFeedback(result.message);
@@ -72,6 +266,7 @@ export function StocksManager({
       }
 
       setTicker("");
+      setSelectedKrxStock(null);
       setSelectedStatus("watching");
       router.refresh();
     });
@@ -150,7 +345,7 @@ export function StocksManager({
   }
 
   return (
-    <section className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+    <section className="mx-auto flex w-full max-w-7xl flex-col gap-6">
       <header className="flex flex-col gap-3 rounded-[24px] border border-[#23252a] bg-[#0f1011] p-6 text-[#f7f8f8] shadow-[0_0_0_1px_rgba(255,255,255,0.01)]">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="flex flex-col gap-2">
@@ -165,14 +360,25 @@ export function StocksManager({
             </p>
           </div>
           {isAuthenticated ? (
-            <form action={logoutAction}>
+            <div className="flex items-center gap-2">
               <button
-                type="submit"
-                className="rounded-[8px] border border-[#23252a] bg-[#141516] px-3 py-2 text-[14px] font-medium text-[#f7f8f8] transition hover:border-[#5e6ad2] hover:text-white"
+                type="button"
+                aria-label="새로고침"
+                onClick={() => router.refresh()}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-[8px] border border-[#23252a] bg-[#141516] text-[#f7f8f8] transition hover:border-[#5e6ad2]"
               >
-                로그아웃
+                <RefreshCw size={18} />
               </button>
-            </form>
+              <form action={logoutAction}>
+                <button
+                  type="submit"
+                  aria-label="로그아웃"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-[8px] border border-[#23252a] bg-[#141516] text-[#f7f8f8] transition hover:border-[#5e6ad2]"
+                >
+                  <LogOut size={18} />
+                </button>
+              </form>
+            </div>
           ) : null}
         </div>
         {!isAuthenticated ? (
@@ -182,76 +388,117 @@ export function StocksManager({
         ) : null}
       </header>
 
-      <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
-        <div className="rounded-[16px] border border-[#23252a] bg-[#0f1011] p-5 text-[#f7f8f8]">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-[20px] font-medium tracking-[-0.02em]">종목 추가</h2>
-            <span className="rounded-full border border-[#23252a] bg-[#141516] px-2.5 py-1 text-[12px] text-[#8a8f98]">
-              Yahoo Lookup
-            </span>
-          </div>
-
-          <form action={lookupAction} className="flex flex-col gap-3">
-            <label className="flex flex-col gap-2">
-              <span className="text-[13px] text-[#d0d6e0]">티커 코드</span>
+      <div className="rounded-[16px] border border-[#23252a] bg-[#0f1011] p-5 text-[#f7f8f8]">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="relative flex min-w-[220px] flex-1 flex-col gap-2">
+              <span className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">종목 추가</span>
               <input
                 name="ticker"
                 value={ticker}
                 onChange={(event) => setTicker(event.target.value.toUpperCase())}
-                placeholder="예: AAPL, TSLA, 005930.KS"
-                className="rounded-[8px] border border-[#23252a] bg-[#141516] px-3 py-2.5 text-[14px] text-[#f7f8f8] outline-none transition focus:border-[#5e6ad2] focus:ring-1 focus:ring-[#5e6ad2]"
+                onFocus={() => setIsSearchOpen(true)}
+                onBlur={() => window.setTimeout(() => setIsSearchOpen(false), 120)}
+                placeholder="티커 입력 (예: 005930.KS, AAPL)"
+                className="h-11 rounded-[10px] border border-[#23252a] bg-[#141516] px-3 text-[14px] text-[#f7f8f8] outline-none transition focus:border-[#5e6ad2] focus:ring-1 focus:ring-[#5e6ad2]"
               />
-            </label>
-            <label className="flex flex-col gap-2">
-              <span className="text-[13px] text-[#d0d6e0]">기본 상태</span>
-              <select
-                value={selectedStatus}
-                onChange={(event) => setSelectedStatus(event.target.value as StockStatus)}
-                className="rounded-[8px] border border-[#23252a] bg-[#141516] px-3 py-2.5 text-[14px] text-[#f7f8f8] outline-none transition focus:border-[#5e6ad2] focus:ring-1 focus:ring-[#5e6ad2]"
+              {isSearchOpen ? (
+                <div className="absolute top-[78px] z-20 w-full overflow-hidden rounded-[12px] border border-[#23252a] bg-[#18191a] shadow-[0_18px_60px_rgba(0,0,0,0.5)]">
+                  {searchResults.length === 0 ? (
+                    <div className="px-4 py-3 text-[13px] text-[#8a8f98]">결과 없음</div>
+                  ) : (
+                    searchResults.map((item) => (
+                      <button
+                        key={`${item.code}-${item.ticker}`}
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          setTicker(item.ticker);
+                          setSelectedKrxStock(item);
+                          setIsSearchOpen(false);
+                          const formData = new FormData();
+                          formData.set("ticker", item.ticker);
+                          startTransition(() => {
+                            lookupAction(formData);
+                          });
+                        }}
+                        className="flex w-full flex-col gap-1 border-b border-[#23252a] px-4 py-3 text-left transition hover:bg-[#141516] last:border-b-0"
+                      >
+                        <span className="text-[14px] text-[#f7f8f8]">{item.name}</span>
+                        <span className="text-[12px] text-[#8a8f98]">
+                          {item.code} · {item.market}
+                        </span>
+                        <span className="font-mono text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">
+                          {item.ticker}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              ) : null}
+            </div>
+
+            <form action={lookupAction} className="flex items-end gap-2">
+              <input type="hidden" name="ticker" value={ticker} />
+              <button
+                type="submit"
+                disabled={isLookupPending || !ticker.trim()}
+                className="h-11 rounded-[10px] bg-[#5e6ad2] px-4 text-[14px] font-medium text-white transition hover:bg-[#828fff] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <option value="watching">관심</option>
-                <option value="holding">보유</option>
-              </select>
-            </label>
-            <button
-              type="submit"
-              disabled={isLookupPending || !ticker.trim()}
-              className="rounded-[8px] bg-[#5e6ad2] px-3 py-2.5 text-[14px] font-medium text-white transition hover:bg-[#828fff] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isLookupPending ? "조회 중..." : "티커 조회"}
-            </button>
-          </form>
+                {isLookupPending ? "조회 중..." : "조회"}
+              </button>
+            </form>
+          </div>
 
           {activeLookup ? (
-            <div className="mt-4 rounded-[12px] border border-[#23252a] bg-[#141516] p-4">
-              <div className="flex flex-col gap-1">
-                <span className="font-mono text-[12px] uppercase tracking-[0.2em] text-[#8a8f98]">
-                  {activeLookup.ticker}
-                </span>
-                <strong className="text-[18px] font-medium tracking-[-0.02em]">
-                  {activeLookup.name}
-                </strong>
-                <span className="text-[13px] text-[#d0d6e0]">{activeLookup.market}</span>
-              </div>
-              <div className="mt-4 flex gap-2">
-                <button
-                  type="button"
-                  disabled={!isAuthenticated || isPending}
-                  onClick={() => handleSave(selectedStatus)}
-                  className="flex-1 rounded-[8px] bg-[#5e6ad2] px-3 py-2.5 text-[14px] font-medium text-white transition hover:bg-[#828fff] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {selectedStatus === "holding" ? "보유로 저장" : "관심으로 저장"}
-                </button>
+            <div className="flex flex-col gap-3 rounded-[14px] border border-[#23252a] bg-[#141516] px-4 py-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex flex-col gap-1">
+                  <span className="font-mono text-[12px] uppercase tracking-[0.2em] text-[#8a8f98]">
+                    {activeLookup.ticker}
+                  </span>
+                  <strong className="text-[18px] font-medium tracking-[-0.02em]">{activeLookup.name}</strong>
+                  <span className="text-[13px] text-[#d0d6e0]">{activeLookup.market}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex rounded-full border border-[#23252a] bg-[#0f1011] p-1">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedStatus("watching")}
+                      className={`rounded-full px-3 py-2 text-[13px] font-medium transition ${
+                        selectedStatus === "watching" ? "bg-[#141516] text-[#f7f8f8]" : "text-[#8a8f98]"
+                      }`}
+                    >
+                      관심
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedStatus("holding")}
+                      className={`rounded-full px-3 py-2 text-[13px] font-medium transition ${
+                        selectedStatus === "holding" ? "bg-[#141516] text-[#f7f8f8]" : "text-[#8a8f98]"
+                      }`}
+                    >
+                      보유
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!isAuthenticated || isPending}
+                    onClick={() => handleSave(selectedStatus)}
+                    className="h-10 rounded-[10px] bg-[#5e6ad2] px-4 text-[14px] font-medium text-white transition hover:bg-[#828fff] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {selectedStatus === "holding" ? "보유로 저장" : "관심으로 저장"}
+                  </button>
+                </div>
               </div>
             </div>
           ) : null}
 
-          {feedback ? (
-            <p className="mt-4 text-[13px] leading-6 text-[#d0d6e0]">{feedback}</p>
-          ) : null}
+          {feedback ? <p className="text-[13px] leading-6 text-[#d0d6e0]">{feedback}</p> : null}
         </div>
+      </div>
 
-        <div className="rounded-[16px] border border-[#23252a] bg-[#0f1011] p-5 text-[#f7f8f8]">
+      <div className="rounded-[16px] border border-[#23252a] bg-[#0f1011] p-5 text-[#f7f8f8]">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-[20px] font-medium tracking-[-0.02em]">종목 대시보드</h2>
             <span className="rounded-full border border-[#23252a] bg-[#141516] px-2.5 py-1 text-[12px] text-[#8a8f98]">
@@ -260,12 +507,14 @@ export function StocksManager({
           </div>
 
           {hasStocks ? (
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               {initialStocks.map((stock) => {
                 const isHolding = stock.status === "holding";
                 const changePercent = stock.quote?.marketChangePercent ?? null;
                 const isPositive = (changePercent ?? 0) > 0;
                 const isNegative = (changePercent ?? 0) < 0;
+                const rawDisplayName = localizedNames[stock.ticker] ?? stock.name;
+                const displayName = rawDisplayName.replace(/\s*\(.*?\)\s*$/, "");
 
                 return (
                   <article
@@ -287,21 +536,20 @@ export function StocksManager({
                         : "0 0 0 1px rgba(255,255,255,0.01)",
                     }}
                   >
-                    <div className="flex h-full flex-col gap-5">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex flex-col gap-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="text-[20px] font-medium tracking-[-0.03em]">
-                              {stock.name}
+                    <div className="flex h-full min-h-[360px] flex-col gap-3">
+                      <div className="flex min-h-[72px] items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex min-h-[30px] items-center gap-2">
+                            <h3 className="line-clamp-1 text-[20px] font-medium tracking-[-0.03em]">
+                              {displayName}
                             </h3>
-                            <span className="rounded-full border border-[#23252a] bg-[#010102] px-2.5 py-1 font-mono text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">
-                              {stock.ticker}
-                            </span>
                           </div>
-                          <p className="text-[13px] text-[#d0d6e0]">{stock.market}</p>
+                          <p className="mt-1 line-clamp-1 min-h-[18px] font-mono text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">
+                            {stock.ticker}
+                          </p>
                         </div>
                         <span
-                          className="rounded-full px-2.5 py-1 text-[12px] font-medium"
+                          className="inline-flex min-h-[28px] min-w-[44px] items-center justify-center rounded-full px-2.5 py-1 text-[12px] font-medium"
                           style={{
                             backgroundColor: isHolding
                               ? "rgba(39, 166, 68, 0.12)"
@@ -313,21 +561,21 @@ export function StocksManager({
                         </span>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="rounded-[16px] border border-[#23252a] bg-[#0f1011] p-4">
+                      <div className="grid grid-cols-10 gap-2">
+                        <div className="col-span-6 rounded-[16px] border border-[#23252a] bg-[#0f1011] px-4 py-3">
                           <p className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">
                             현재가
                           </p>
-                          <p className="mt-2 text-[22px] font-medium tracking-[-0.03em] text-[#f7f8f8]">
+                          <p className="mt-2 min-h-[30px] truncate text-[18px] font-medium tracking-[-0.02em] text-[#f7f8f8]">
                             {formatPrice(stock.quote?.marketPrice ?? null, stock.quote?.currency)}
                           </p>
                         </div>
-                        <div className="rounded-[16px] border border-[#23252a] bg-[#0f1011] p-4">
-                          <p className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">
+                        <div className="col-span-4 rounded-[16px] border border-[#23252a] bg-[#0f1011] px-3 py-3">
+                          <p className="text-[11px] uppercase tracking-[0.12em] text-[#8a8f98]">
                             등락률
                           </p>
                           <p
-                            className="mt-2 text-[22px] font-medium tracking-[-0.03em]"
+                            className="mt-2 min-h-[30px] whitespace-nowrap text-[16px] font-medium tracking-[-0.01em]"
                             style={{
                               color: isPositive
                                 ? "#27a644"
@@ -341,7 +589,7 @@ export function StocksManager({
                         </div>
                       </div>
 
-                      <div className="rounded-[16px] border border-[#23252a] bg-[#0f1011] p-4">
+                      <div className="rounded-[16px] border border-[#23252a] bg-[#0f1011] p-3.5">
                         <div className="flex items-center justify-between gap-3">
                           <p className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">
                             AI 한줄 요약
@@ -352,13 +600,13 @@ export function StocksManager({
                             </span>
                           ) : null}
                         </div>
-                        <p className="mt-2 line-clamp-2 text-[14px] leading-6 text-[#d0d6e0]">
+                        <p className="mt-2 min-h-[52px] line-clamp-2 text-[13px] leading-6 text-[#d0d6e0]">
                           {stock.latestAnalysisSummary ?? "분석 없음"}
                         </p>
                       </div>
 
                       <div
-                        className="flex flex-wrap gap-2"
+                        className="mt-0.5 flex flex-wrap gap-2"
                         onClick={(event) => event.stopPropagation()}
                         onKeyDown={(event) => event.stopPropagation()}
                       >
@@ -366,17 +614,9 @@ export function StocksManager({
                           type="button"
                           disabled={!isAuthenticated || isPending}
                           onClick={() => handleToggle(stock.id, stock.status)}
-                          className="rounded-[8px] border border-[#23252a] bg-[#0f1011] px-3 py-2 text-[14px] font-medium text-[#f7f8f8] transition hover:border-[#5e6ad2] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                          className="inline-flex h-10 min-h-[40px] items-center justify-center rounded-[8px] border border-[#23252a] bg-[#0f1011] px-3 text-[14px] font-medium leading-none text-[#f7f8f8] transition hover:border-[#5e6ad2] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {isHolding ? "관심으로 변경" : "보유로 변경"}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={!isAuthenticated || isPending}
-                          onClick={() => handleDelete(stock.id, stock.name)}
-                          className="rounded-[8px] border border-[#3e3e44] bg-[#0f1011] px-3 py-2 text-[14px] font-medium text-[#e5484d] transition hover:border-[#e5484d] disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          삭제
                         </button>
                       </div>
                     </div>
@@ -393,12 +633,12 @@ export function StocksManager({
             </div>
           )}
         </div>
-      </div>
 
       <StockDrawer
         detail={selectedDetail}
         isOpen={Boolean(selectedDetail)}
         onClose={() => updateDrawerTicker(null)}
+        onDelete={handleDelete}
       />
     </section>
   );

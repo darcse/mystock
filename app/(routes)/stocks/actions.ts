@@ -1,5 +1,7 @@
 "use server";
 
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { revalidatePath } from "next/cache";
 import type {
   LookupState,
@@ -283,5 +285,117 @@ export async function saveMemoAction(formData: FormData): Promise<MutationResult
   return {
     ok: true,
     message: "투자 메모가 저장되었습니다.",
+  };
+}
+
+export async function syncKoreanStockNamesAction(): Promise<MutationResult> {
+  const { supabase, user, error } = await requireUser();
+
+  if (!user) {
+    return {
+      ok: false,
+      message: error,
+    };
+  }
+
+  const { data: stocks, error: stocksError } = await supabase
+    .from("stocks")
+    .select("id, ticker, name")
+    .eq("user_id", user.id);
+
+  if (stocksError) {
+    return {
+      ok: false,
+      message: "종목 목록을 불러오지 못했습니다.",
+    };
+  }
+
+  const koreanTargets = (stocks ?? []).filter(
+    (stock) =>
+      /\.(KS|KQ)$/i.test(stock.ticker) &&
+      !/[가-힣]/.test(stock.name) &&
+      !stock.name.includes("("),
+  );
+
+  if (koreanTargets.length === 0) {
+    return {
+      ok: true,
+      message: "동기화할 한글 종목명이 없습니다.",
+    };
+  }
+
+  let krxTickerMap = new Map<string, string>();
+  let krxCodeMap = new Map<string, string>();
+
+  try {
+    const filePath = path.join(process.cwd(), "public", "krx_stocks.json");
+    const raw = await readFile(filePath, "utf-8");
+    const parsed = JSON.parse(raw) as Array<{ name?: string; ticker?: string }>;
+
+    const normalizedRows = parsed.filter(
+      (item): item is { code?: string; name: string; ticker?: string } => typeof item?.name === "string",
+    );
+
+    krxTickerMap = new Map(
+      normalizedRows
+        .filter((item) => typeof item.ticker === "string")
+        .map((item) => [item.ticker!.toUpperCase(), item.name.trim()]),
+    );
+
+    krxCodeMap = new Map(
+      normalizedRows
+        .filter((item) => typeof item.code === "string")
+        .map((item) => [item.code!.replace(/^0+/, "").toUpperCase(), item.name.trim()]),
+    );
+  } catch {
+    return {
+      ok: false,
+      message: "KRX 종목 데이터 로드에 실패했습니다.",
+    };
+  }
+
+  let updatedCount = 0;
+  let nameMatchedCount = 0;
+
+  for (const stock of koreanTargets) {
+    try {
+      const normalizedTicker = stock.ticker.toUpperCase();
+      const stockCode = normalizedTicker.replace(/\.(KS|KQ)$/i, "").replace(/^0+/, "");
+      const koreanName =
+        krxTickerMap.get(normalizedTicker) ?? (stockCode ? krxCodeMap.get(stockCode.toUpperCase()) : null) ?? null;
+
+      if (!koreanName || !/[가-힣]/.test(koreanName)) {
+        continue;
+      }
+      nameMatchedCount += 1;
+
+      const mergedName = `${koreanName} (${stock.name})`;
+      const { error: updateError } = await supabase
+        .from("stocks")
+        .update({
+          name: mergedName,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", stock.id)
+        .eq("user_id", user.id);
+
+      if (!updateError) {
+        updatedCount += 1;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  revalidatePath("/stocks");
+
+  return {
+    ok: true,
+    message:
+      updatedCount > 0
+        ? `한글 종목명 동기화 완료: 대상 ${koreanTargets.length}개 중 ${updatedCount}개 업데이트`
+        : nameMatchedCount > 0
+          ? "한글명 매칭은 되었지만 업데이트에 실패했습니다. RLS/권한 정책을 확인해 주세요."
+          : `동기화 가능한 한글 종목명을 찾지 못했습니다. (대상 ${koreanTargets.length}개)`,
   };
 }

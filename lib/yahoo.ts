@@ -11,6 +11,12 @@ export type StockLookup = {
   market: string;
 };
 
+export type StockSearchResult = {
+  ticker: string;
+  name: string;
+  market: string;
+};
+
 type YahooQuoteResult = {
   currency?: string;
   exchange?: string;
@@ -39,6 +45,16 @@ type YahooChartResult = {
   quotes?: YahooHistoricalResult;
 };
 
+type YahooSearchResult = {
+  quotes?: Array<{
+    exchange?: string;
+    longname?: string;
+    quoteType?: string;
+    shortname?: string;
+    symbol?: string;
+  }>;
+};
+
 function normalizeTicker(ticker: string) {
   return ticker.trim().toUpperCase();
 }
@@ -61,6 +77,31 @@ export async function getStockLookup(ticker: string): Promise<StockLookup | null
       name: (quote.shortName ?? quote.longName ?? normalizeTicker(ticker)) as string,
       market: (quote.fullExchangeName ?? quote.exchange ?? "Unknown") as string,
     };
+  } catch (error) {
+    throw new Error(toErrorMessage(error));
+  }
+}
+
+export async function searchStocks(query: string): Promise<StockSearchResult[]> {
+  const normalizedQuery = query.trim();
+
+  if (normalizedQuery.length < 1) {
+    return [];
+  }
+
+  try {
+    const result = (await yahooFinance.search(normalizedQuery)) as YahooSearchResult;
+    const quotes = result.quotes ?? [];
+
+    return quotes
+      .filter((item) => item.symbol)
+      .slice(0, 8)
+      .map((item) => ({
+        ticker: normalizeTicker(item.symbol ?? ""),
+        name: (item.shortname ?? item.longname ?? item.symbol ?? "").trim(),
+        market: (item.exchange ?? "Unknown").trim(),
+      }))
+      .filter((item) => item.ticker && item.name);
   } catch (error) {
     throw new Error(toErrorMessage(error));
   }
