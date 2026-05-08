@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronUp, Loader2, RefreshCw, Trash2 } from "lucide-react";
 import type { AnalysisReport, StockChartPoint, StockDrawerDetail, StockMemo } from "@/types/stock";
@@ -270,12 +270,38 @@ export function StockDrawer({
   const [isDisclosuresOpen, setIsDisclosuresOpen] = useState(false);
   const [isQuoteRefreshing, setIsQuoteRefreshing] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  const closeFallbackTimerRef = useRef<number | null>(null);
+  const closeHandledRef = useRef(false);
+  const finalizeClose = useCallback(() => {
+    if (closeHandledRef.current) {
+      return;
+    }
+
+    closeHandledRef.current = true;
+    if (closeFallbackTimerRef.current) {
+      window.clearTimeout(closeFallbackTimerRef.current);
+      closeFallbackTimerRef.current = null;
+    }
+
+    setIsClosing(false);
+    setIsVisible(false);
+    onClose();
+  }, [onClose]);
+
   const handleClose = useCallback(() => {
     if (isClosing || !isVisible) {
       return;
     }
+    closeHandledRef.current = false;
+    if (closeFallbackTimerRef.current) {
+      window.clearTimeout(closeFallbackTimerRef.current);
+      closeFallbackTimerRef.current = null;
+    }
     setIsClosing(true);
-  }, [isClosing, isVisible]);
+    closeFallbackTimerRef.current = window.setTimeout(() => {
+      finalizeClose();
+    }, 200);
+  }, [finalizeClose, isClosing, isVisible]);
 
   useEffect(() => {
     if (detail) {
@@ -285,10 +311,24 @@ export function StockDrawer({
 
   useEffect(() => {
     if (isOpen) {
+      if (closeFallbackTimerRef.current) {
+        window.clearTimeout(closeFallbackTimerRef.current);
+        closeFallbackTimerRef.current = null;
+      }
+      closeHandledRef.current = false;
       setIsVisible(true);
       setIsClosing(false);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (closeFallbackTimerRef.current) {
+        window.clearTimeout(closeFallbackTimerRef.current);
+        closeFallbackTimerRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     setRange("3M");
@@ -444,9 +484,7 @@ export function StockDrawer({
           }
 
           if (isClosing) {
-            setIsClosing(false);
-            setIsVisible(false);
-            onClose();
+            finalizeClose();
             return;
           }
 
