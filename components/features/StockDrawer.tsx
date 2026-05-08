@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronUp, Loader2, RefreshCw, Trash2 } from "lucide-react";
 import type { AnalysisReport, StockChartPoint, StockDrawerDetail, StockMemo } from "@/types/stock";
@@ -248,7 +248,6 @@ export function StockDrawer({
   onClose,
   onDelete,
   onRefresh,
-  isQuoteRefreshing: _isQuoteRefreshing = false,
 }: StockDrawerProps) {
   const router = useRouter();
   const [renderedDetail, setRenderedDetail] = useState<StockDrawerDetail | null>(detail);
@@ -271,12 +270,12 @@ export function StockDrawer({
   const [isDisclosuresOpen, setIsDisclosuresOpen] = useState(false);
   const [isQuoteRefreshing, setIsQuoteRefreshing] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     if (isClosing || !isVisible) {
       return;
     }
     setIsClosing(true);
-  };
+  }, [isClosing, isVisible]);
 
   useEffect(() => {
     if (detail) {
@@ -289,7 +288,7 @@ export function StockDrawer({
       setIsVisible(true);
       setIsClosing(false);
     }
-  }, [isOpen, onClose]);
+  }, [isOpen, handleClose]);
 
   useEffect(() => {
     setRange("3M");
