@@ -1,7 +1,9 @@
 import YahooFinance from "yahoo-finance2";
-import type { StockQuote } from "@/types/stock";
+import type { StockChartPoint, StockQuote } from "@/types/stock";
 
-const yahooFinance = new YahooFinance();
+const yahooFinance = new YahooFinance({
+  suppressNotices: ["ripHistorical"],
+});
 
 export type StockLookup = {
   ticker: string;
@@ -12,6 +14,8 @@ export type StockLookup = {
 type YahooQuoteResult = {
   currency?: string;
   exchange?: string;
+  fiftyTwoWeekHigh?: number;
+  fiftyTwoWeekLow?: number;
   fullExchangeName?: string;
   longName?: string;
   quoteType?: string;
@@ -20,6 +24,19 @@ type YahooQuoteResult = {
   regularMarketPrice?: number;
   shortName?: string;
   symbol?: string;
+};
+
+type YahooHistoricalResult = Array<{
+  close?: number | null;
+  date?: Date;
+  high?: number | null;
+  low?: number | null;
+  open?: number | null;
+  volume?: number | null;
+}>;
+
+type YahooChartResult = {
+  quotes?: YahooHistoricalResult;
 };
 
 function normalizeTicker(ticker: string) {
@@ -61,6 +78,8 @@ export async function getStockQuote(ticker: string): Promise<StockQuote | null> 
       marketPrice: quote.regularMarketPrice ?? null,
       marketChange: quote.regularMarketChange ?? null,
       marketChangePercent: quote.regularMarketChangePercent ?? null,
+      fiftyTwoWeekHigh: quote.fiftyTwoWeekHigh ?? null,
+      fiftyTwoWeekLow: quote.fiftyTwoWeekLow ?? null,
     };
   } catch {
     return null;
@@ -81,4 +100,59 @@ export async function getStockDashboardQuote(ticker: string) {
     quote,
     quoteError: null,
   };
+}
+
+function getPeriodStartDate() {
+  const date = new Date();
+  date.setMonth(date.getMonth() - 6);
+  return date;
+}
+
+function getMovingAverage(values: number[], windowSize: number, currentIndex: number) {
+  if (currentIndex + 1 < windowSize) {
+    return null;
+  }
+
+  const window = values.slice(currentIndex + 1 - windowSize, currentIndex + 1);
+  const total = window.reduce((sum, value) => sum + value, 0);
+  return total / window.length;
+}
+
+export async function getStockChart(ticker: string): Promise<StockChartPoint[]> {
+  const chart = (await yahooFinance.chart(normalizeTicker(ticker), {
+    interval: "1d",
+    period1: getPeriodStartDate(),
+  })) as YahooChartResult;
+  const historical = chart.quotes ?? [];
+
+  const normalized = historical
+    .filter(
+      (point) =>
+        point.date &&
+        point.open !== null &&
+        point.open !== undefined &&
+        point.high !== null &&
+        point.high !== undefined &&
+        point.low !== null &&
+        point.low !== undefined &&
+        point.close !== null &&
+        point.close !== undefined,
+    )
+    .map((point) => ({
+      close: Number(point.close),
+      date: point.date!.toISOString(),
+      high: Number(point.high),
+      low: Number(point.low),
+      open: Number(point.open),
+      volume: point.volume ?? null,
+    }));
+
+  const closes = normalized.map((point) => point.close);
+
+  return normalized.map((point, index) => ({
+    ...point,
+    ma20: getMovingAverage(closes, 20, index),
+    ma60: getMovingAverage(closes, 60, index),
+    ma120: getMovingAverage(closes, 120, index),
+  }));
 }

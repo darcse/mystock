@@ -1,7 +1,9 @@
+import { getDartDisclosures } from "@/lib/dart";
+import { getStockNews } from "@/lib/news";
 import { StocksManager } from "@/components/features/StocksManager";
-import { getStockDashboardQuote } from "@/lib/yahoo";
+import { getStockChart, getStockDashboardQuote, getStockQuote } from "@/lib/yahoo";
 import { createClient } from "@/lib/supabase/server";
-import type { StockDashboardItem, StockItem } from "@/types/stock";
+import type { StockDashboardItem, StockDrawerDetail, StockItem } from "@/types/stock";
 
 function mapStockItem(stock: {
   created_at: string;
@@ -23,13 +25,51 @@ function mapStockItem(stock: {
   };
 }
 
-export default async function StocksPage() {
+type StocksPageProps = {
+  searchParams: Promise<{
+    ticker?: string;
+  }>;
+};
+
+async function resolveDetail(stock: StockDashboardItem): Promise<StockDrawerDetail> {
+  const [quoteResult, chartResult, newsResult, disclosureResult] = await Promise.allSettled([
+    getStockQuote(stock.ticker),
+    getStockChart(stock.ticker),
+    getStockNews({ name: stock.name, ticker: stock.ticker }),
+    getDartDisclosures(stock.ticker),
+  ]);
+
+  return {
+    chart: chartResult.status === "fulfilled" ? chartResult.value : [],
+    chartError: chartResult.status === "rejected" ? String(chartResult.reason.message ?? chartResult.reason) : null,
+    disclosures: disclosureResult.status === "fulfilled" ? disclosureResult.value : [],
+    disclosuresError:
+      disclosureResult.status === "rejected"
+        ? String(disclosureResult.reason.message ?? disclosureResult.reason)
+        : null,
+    news: newsResult.status === "fulfilled" ? newsResult.value : [],
+    newsError: newsResult.status === "rejected" ? String(newsResult.reason.message ?? newsResult.reason) : null,
+    stock,
+    stockQuote: quoteResult.status === "fulfilled" ? quoteResult.value : null,
+    stockQuoteError:
+      quoteResult.status === "rejected"
+        ? String(quoteResult.reason.message ?? quoteResult.reason)
+        : quoteResult.status === "fulfilled" && !quoteResult.value
+          ? "시세를 불러오지 못했습니다."
+          : null,
+  };
+}
+
+export default async function StocksPage({ searchParams }: StocksPageProps) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const resolvedSearchParams = await searchParams;
+  const selectedTicker = resolvedSearchParams.ticker?.trim().toUpperCase() ?? null;
 
   let stocks: StockDashboardItem[] = [];
+  let selectedDetail: StockDrawerDetail | null = null;
 
   if (user) {
     const { data } = await supabase
@@ -67,11 +107,23 @@ export default async function StocksPage() {
         };
       }),
     );
+
+    if (selectedTicker) {
+      const selectedStock = stocks.find((stock) => stock.ticker === selectedTicker) ?? null;
+
+      if (selectedStock) {
+        selectedDetail = await resolveDetail(selectedStock);
+      }
+    }
   }
 
   return (
     <main className="min-h-screen bg-[#010102] px-4 py-10 md:px-8">
-      <StocksManager initialStocks={stocks} isAuthenticated={Boolean(user)} />
+      <StocksManager
+        initialStocks={stocks}
+        isAuthenticated={Boolean(user)}
+        selectedDetail={selectedDetail}
+      />
     </main>
   );
 }

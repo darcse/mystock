@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { LookupState } from "@/app/(routes)/stocks/action-types";
 import { logoutAction } from "@/app/(routes)/login/actions";
 import {
@@ -10,11 +10,13 @@ import {
   lookupStockAction,
   toggleStockStatusAction,
 } from "@/app/(routes)/stocks/actions";
-import type { StockDashboardItem, StockStatus } from "@/types/stock";
+import { StockDrawer } from "@/components/features/StockDrawer";
+import type { StockDashboardItem, StockDrawerDetail, StockStatus } from "@/types/stock";
 
 type StocksManagerProps = {
   initialStocks: StockDashboardItem[];
   isAuthenticated: boolean;
+  selectedDetail: StockDrawerDetail | null;
 };
 
 const initialLookupState: LookupState = {
@@ -25,8 +27,11 @@ const initialLookupState: LookupState = {
 export function StocksManager({
   initialStocks,
   isAuthenticated,
+  selectedDetail,
 }: StocksManagerProps) {
+  const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [ticker, setTicker] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<StockStatus>("watching");
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -127,6 +132,21 @@ export function StocksManager({
     }
 
     return `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
+  }
+
+  function updateDrawerTicker(nextTicker: string | null) {
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (nextTicker) {
+      params.set("ticker", nextTicker);
+    } else {
+      params.delete("ticker");
+    }
+
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, {
+      scroll: false,
+    });
   }
 
   return (
@@ -252,11 +272,11 @@ export function StocksManager({
                     key={stock.id}
                     role="link"
                     tabIndex={0}
-                    onClick={() => router.push(`/stocks/${stock.ticker}`)}
+                    onClick={() => updateDrawerTicker(stock.ticker)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
-                        router.push(`/stocks/${stock.ticker}`);
+                        updateDrawerTicker(stock.ticker);
                       }
                     }}
                     className="cursor-pointer rounded-[20px] border bg-[#141516] p-5 transition hover:-translate-y-0.5 hover:border-[#34343a] hover:bg-[#18191a] focus:outline-none focus:ring-1 focus:ring-[#5e6ad2]"
@@ -374,6 +394,12 @@ export function StocksManager({
           )}
         </div>
       </div>
+
+      <StockDrawer
+        detail={selectedDetail}
+        isOpen={Boolean(selectedDetail)}
+        onClose={() => updateDrawerTicker(null)}
+      />
     </section>
   );
 }

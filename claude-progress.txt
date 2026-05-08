@@ -1,3 +1,5 @@
 [2026-05-08] [Codex] STOCK-001, STOCK-002, STOCK-003 구현 완료: 종목 조회/저장/삭제/상태 토글 UI 및 서버 액션 추가 | passes: 변경 없음
 [2026-05-08] [Codex] AUTH-001, AUTH-002 구현 완료: 이메일 로그인/로그아웃 및 /stocks 보호 라우팅 추가 | passes: 변경 없음
 [2026-05-08] [Codex] DASHBOARD-001, DASHBOARD-002, DASHBOARD-003 구현 완료: 종목 카드 대시보드, 시세/AI 요약, 상세 이동 추가 | passes: 변경 없음
+[2026-05-08] [Codex] DASHBOARD-003 및 DETAIL-001/002/003/004 구현 완료: 드로어 상세, 차트, 뉴스, 공시 연동 추가 | passes: 변경 없음
+[2026-05-08] [Codex] DETAIL 차트/뉴스 수정 완료: Yahoo chart() 전환 및 한국 종목 뉴스 검색 재시도 추가 | passes: 변경 없음
