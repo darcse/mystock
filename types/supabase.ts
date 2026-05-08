@@ -13,6 +13,10 @@ export type Database = {
         Row: {
           created_at: string;
           id: string;
+          opinion: string | null;
+          positives: string[] | null;
+          raw_response: string | null;
+          risks: string[] | null;
           summary: string | null;
           stock_id: string;
           user_id: string;
@@ -20,6 +24,10 @@ export type Database = {
         Insert: {
           created_at?: string;
           id?: string;
+          opinion?: string | null;
+          positives?: string[] | null;
+          raw_response?: string | null;
+          risks?: string[] | null;
           summary?: string | null;
           stock_id: string;
           user_id: string;
@@ -27,6 +35,10 @@ export type Database = {
         Update: {
           created_at?: string;
           id?: string;
+          opinion?: string | null;
+          positives?: string[] | null;
+          raw_response?: string | null;
+          risks?: string[] | null;
           summary?: string | null;
           stock_id?: string;
           user_id?: string;

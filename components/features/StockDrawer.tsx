@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import type { StockChartPoint, StockDrawerDetail } from "@/types/stock";
+import type { AnalysisReport, StockChartPoint, StockDrawerDetail } from "@/types/stock";
 
 type ChartRange = "1M" | "3M" | "6M";
 
@@ -56,6 +56,19 @@ function formatDisclosureDate(value: string) {
   }
 
   return `${value.slice(0, 4)}.${value.slice(4, 6)}.${value.slice(6, 8)}`;
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("ko-KR", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
 }
 
 function getRangeStartDate(range: ChartRange) {
@@ -231,6 +244,9 @@ export function StockDrawer({
 }: StockDrawerProps) {
   const [range, setRange] = useState<ChartRange>("3M");
   const [isChartPending, startTransition] = useTransition();
+  const [analysis, setAnalysis] = useState<AnalysisReport | null>(detail?.analysis ?? null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) {
@@ -249,6 +265,8 @@ export function StockDrawer({
 
   useEffect(() => {
     setRange("3M");
+    setAnalysis(detail?.analysis ?? null);
+    setAnalysisError(null);
   }, [detail?.stock.ticker]);
 
   if (!detail) {
@@ -260,6 +278,40 @@ export function StockDrawer({
   const changePercent = quote?.marketChangePercent ?? null;
   const isPositive = (changePercent ?? 0) > 0;
   const isNegative = (changePercent ?? 0) < 0;
+
+  async function handleAnalyze() {
+    setIsAnalyzing(true);
+    setAnalysisError(null);
+
+    try {
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          stock_id: detail.stock.id,
+          ticker: detail.stock.ticker,
+          name: detail.stock.name,
+        }),
+      });
+      const json = (await response.json()) as {
+        error?: string;
+        result?: AnalysisReport;
+      };
+
+      if (!response.ok || !json.result) {
+        setAnalysisError(json.error ?? "AI 분석 요청에 실패했습니다.");
+        return;
+      }
+
+      setAnalysis(json.result);
+    } catch {
+      setAnalysisError("AI 분석 요청에 실패했습니다.");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }
 
   return (
     <div
@@ -335,6 +387,80 @@ export function StockDrawer({
             </p>
           </div>
         </div>
+
+        <section className="mt-8">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-[20px] font-medium tracking-[-0.03em]">AI 분석 리포트</h3>
+              <p className="mt-1 text-[13px] text-[#8a8f98]">
+                시세, 뉴스, 공시를 종합해 매수/매도/관망 의견을 제공합니다.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleAnalyze}
+              disabled={isAnalyzing}
+              className="rounded-[8px] bg-[#5e6ad2] px-3 py-2 text-[14px] font-medium text-white transition hover:bg-[#828fff] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isAnalyzing ? "분석 중..." : analysis ? "재분석" : "분석 시작"}
+            </button>
+          </div>
+          <div className="rounded-[16px] border border-[#23252a] bg-[#0f1011] p-5">
+            {analysisError ? (
+              <p className="text-[13px] text-[#e5484d]">{analysisError}</p>
+            ) : null}
+            {!analysis && !analysisError ? (
+              <p className="text-[13px] text-[#8a8f98]">아직 분석 없음</p>
+            ) : null}
+            {analysis ? (
+              <div className="flex flex-col gap-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">의견</span>
+                  <span
+                    className="rounded-full px-2.5 py-1 text-[12px] font-medium"
+                    style={{
+                      backgroundColor:
+                        analysis.opinion === "매수"
+                          ? "rgba(39,166,68,0.12)"
+                          : analysis.opinion === "매도"
+                            ? "rgba(229,72,77,0.12)"
+                            : "rgba(138,143,152,0.2)",
+                      color:
+                        analysis.opinion === "매수"
+                          ? "#27a644"
+                          : analysis.opinion === "매도"
+                            ? "#e5484d"
+                            : "#d0d6e0",
+                    }}
+                  >
+                    {analysis.opinion}
+                  </span>
+                  <span className="text-[12px] text-[#8a8f98]">{formatDateTime(analysis.createdAt)}</span>
+                </div>
+                <div>
+                  <p className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">현재 상황 요약</p>
+                  <p className="mt-2 text-[14px] leading-6 text-[#f7f8f8]">{analysis.summary}</p>
+                </div>
+                <div>
+                  <p className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">긍정 요인</p>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-[14px] leading-6 text-[#d0d6e0]">
+                    {(Array.isArray(analysis.positives) ? analysis.positives : []).map((item, index) => (
+                      <li key={`${item}-${index}`}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">리스크 요인</p>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-[14px] leading-6 text-[#d0d6e0]">
+                    {(Array.isArray(analysis.risks) ? analysis.risks : []).map((item, index) => (
+                      <li key={`${item}-${index}`}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </section>
 
         <section className="mt-8">
           <div className="mb-4 flex items-center justify-between gap-3">

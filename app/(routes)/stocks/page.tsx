@@ -3,7 +3,12 @@ import { getStockNews } from "@/lib/news";
 import { StocksManager } from "@/components/features/StocksManager";
 import { getStockChart, getStockDashboardQuote, getStockQuote } from "@/lib/yahoo";
 import { createClient } from "@/lib/supabase/server";
-import type { StockDashboardItem, StockDrawerDetail, StockItem } from "@/types/stock";
+import type {
+  AnalysisOpinion,
+  StockDashboardItem,
+  StockDrawerDetail,
+  StockItem,
+} from "@/types/stock";
 
 function mapStockItem(stock: {
   created_at: string;
@@ -39,7 +44,25 @@ async function resolveDetail(stock: StockDashboardItem): Promise<StockDrawerDeta
     getDartDisclosures(stock.ticker),
   ]);
 
+  const supabase = await createClient();
+  const { data: analysis } = await supabase
+    .from("analyses")
+    .select("summary, positives, risks, opinion, created_at")
+    .eq("stock_id", stock.id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   return {
+    analysis: analysis
+      ? {
+          summary: analysis.summary ?? "",
+          positives: analysis.positives ?? [],
+          risks: analysis.risks ?? [],
+          opinion: (analysis.opinion as AnalysisOpinion | null) ?? "관망",
+          createdAt: analysis.created_at,
+        }
+      : null,
     chart: chartResult.status === "fulfilled" ? chartResult.value : [],
     chartError: chartResult.status === "rejected" ? String(chartResult.reason.message ?? chartResult.reason) : null,
     disclosures: disclosureResult.status === "fulfilled" ? disclosureResult.value : [],

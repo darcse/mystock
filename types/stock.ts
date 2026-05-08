@@ -60,7 +60,18 @@ export type DartDisclosure = {
   type: string;
 };
 
+export type AnalysisOpinion = "매수" | "매도" | "관망";
+
+export type AnalysisReport = {
+  summary: string;
+  positives: string[];
+  risks: string[];
+  opinion: AnalysisOpinion;
+  createdAt: string;
+};
+
 export type StockDrawerDetail = {
+  analysis: AnalysisReport | null;
   chart: StockChartPoint[];
   chartError: string | null;
   disclosures: DartDisclosure[];

@@ -10,7 +10,7 @@
       "등락률 양수일 때 초록, 음수일 때 빨강으로 표시 확인",
       "yahoo-finance2 호출 실패 시 에러 상태 표시 확인"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "DETAIL-002",
@@ -24,7 +24,7 @@
       "데이터 로딩 중 스피너 노출 확인",
       "차트 데이터 호출 실패 시 에러 상태 표시 확인"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "DETAIL-003",
@@ -38,7 +38,7 @@
       "뉴스가 없을 때 빈 상태 안내 문구 노출 확인",
       "RSS 호출 실패 시 에러 상태 표시 확인"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": "DETAIL-004",
@@ -52,6 +52,6 @@
       "공시가 없을 때 빈 상태 안내 문구 노출 확인",
       "DART API 호출 실패 시 에러 상태 표시 확인"
     ],
-    "passes": false
+    "passes": true
   }
 ]
