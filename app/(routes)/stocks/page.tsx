@@ -36,7 +36,7 @@ type StocksPageProps = {
   }>;
 };
 
-async function resolveDetail(stock: StockDashboardItem): Promise<StockDrawerDetail> {
+async function resolveDetail(stock: StockDashboardItem, userId: string): Promise<StockDrawerDetail> {
   const [quoteResult, chartResult, newsResult, disclosureResult] = await Promise.allSettled([
     getStockQuote(stock.ticker),
     getStockChart(stock.ticker),
@@ -49,8 +49,16 @@ async function resolveDetail(stock: StockDashboardItem): Promise<StockDrawerDeta
     .from("analyses")
     .select("summary, positives, risks, opinion, created_at")
     .eq("stock_id", stock.id)
+    .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(1)
+    .maybeSingle();
+
+  const { data: memo } = await supabase
+    .from("memos")
+    .select("content, buy_reason, stop_loss, target_price, created_at, updated_at")
+    .eq("stock_id", stock.id)
+    .eq("user_id", userId)
     .maybeSingle();
 
   return {
@@ -61,6 +69,16 @@ async function resolveDetail(stock: StockDashboardItem): Promise<StockDrawerDeta
           risks: analysis.risks ?? [],
           opinion: (analysis.opinion as AnalysisOpinion | null) ?? "관망",
           createdAt: analysis.created_at,
+        }
+      : null,
+    memo: memo
+      ? {
+          buyReason: memo.buy_reason ?? "",
+          stopLoss: memo.stop_loss ?? "",
+          targetPrice: memo.target_price ?? "",
+          content: memo.content ?? "",
+          createdAt: memo.created_at,
+          updatedAt: memo.updated_at,
         }
       : null,
     chart: chartResult.status === "fulfilled" ? chartResult.value : [],
@@ -135,7 +153,7 @@ export default async function StocksPage({ searchParams }: StocksPageProps) {
       const selectedStock = stocks.find((stock) => stock.ticker === selectedTicker) ?? null;
 
       if (selectedStock) {
-        selectedDetail = await resolveDetail(selectedStock);
+        selectedDetail = await resolveDetail(selectedStock, user.id);
       }
     }
   }

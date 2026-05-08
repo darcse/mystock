@@ -213,3 +213,75 @@ export async function deleteStockAction(formData: FormData): Promise<MutationRes
     message: "종목이 삭제되었습니다.",
   };
 }
+
+function normalizeOptionalText(value: FormDataEntryValue | null): string | null {
+  const trimmed = String(value ?? "").trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+export async function saveMemoAction(formData: FormData): Promise<MutationResult> {
+  const stockId = String(formData.get("stockId") ?? "");
+  const buyReason = normalizeOptionalText(formData.get("buyReason"));
+  const stopLoss = normalizeOptionalText(formData.get("stopLoss"));
+  const targetPrice = normalizeOptionalText(formData.get("targetPrice"));
+  const content = normalizeOptionalText(formData.get("content"));
+
+  if (!stockId) {
+    return {
+      ok: false,
+      message: "종목을 찾을 수 없습니다.",
+    };
+  }
+
+  const { supabase, user, error } = await requireUser();
+
+  if (!user) {
+    return {
+      ok: false,
+      message: error,
+    };
+  }
+
+  const { data: stock } = await supabase
+    .from("stocks")
+    .select("id")
+    .eq("id", stockId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!stock) {
+    return {
+      ok: false,
+      message: "분석 대상 종목을 찾을 수 없습니다.",
+    };
+  }
+
+  const { error: upsertError } = await supabase
+    .from("memos")
+    .upsert(
+      {
+        stock_id: stockId,
+        user_id: user.id,
+        content,
+        buy_reason: buyReason,
+        stop_loss: stopLoss,
+        target_price: targetPrice,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "stock_id" },
+    );
+
+  if (upsertError) {
+    return {
+      ok: false,
+      message: "메모 저장에 실패했습니다.",
+    };
+  }
+
+  revalidatePath("/stocks");
+
+  return {
+    ok: true,
+    message: "투자 메모가 저장되었습니다.",
+  };
+}

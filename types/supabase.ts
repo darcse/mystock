@@ -50,16 +50,34 @@ export type Database = {
           id: string;
           stock_id: string;
           user_id: string;
+          content: string | null;
+          buy_reason: string | null;
+          stop_loss: string | null;
+          target_price: string | null;
+          created_at: string;
+          updated_at: string;
         };
         Insert: {
           id?: string;
           stock_id: string;
           user_id: string;
+          content?: string | null;
+          buy_reason?: string | null;
+          stop_loss?: string | null;
+          target_price?: string | null;
+          created_at?: string;
+          updated_at?: string;
         };
         Update: {
           id?: string;
           stock_id?: string;
           user_id?: string;
+          content?: string | null;
+          buy_reason?: string | null;
+          stop_loss?: string | null;
+          target_price?: string | null;
+          created_at?: string;
+          updated_at?: string;
         };
         Relationships: [];
       };

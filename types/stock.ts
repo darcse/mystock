@@ -70,8 +70,18 @@ export type AnalysisReport = {
   createdAt: string;
 };
 
+export type StockMemo = {
+  buyReason: string;
+  stopLoss: string;
+  targetPrice: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type StockDrawerDetail = {
   analysis: AnalysisReport | null;
+  memo: StockMemo | null;
   chart: StockChartPoint[];
   chartError: string | null;
   disclosures: DartDisclosure[];

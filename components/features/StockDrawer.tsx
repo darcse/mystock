@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import type { AnalysisReport, StockChartPoint, StockDrawerDetail } from "@/types/stock";
+import { useCallback, useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import type { AnalysisReport, StockChartPoint, StockDrawerDetail, StockMemo } from "@/types/stock";
+import { saveMemoAction } from "@/app/(routes)/stocks/actions";
 
 type ChartRange = "1M" | "3M" | "6M";
 
@@ -242,11 +244,72 @@ export function StockDrawer({
   isOpen,
   onClose,
 }: StockDrawerProps) {
+  const router = useRouter();
   const [range, setRange] = useState<ChartRange>("3M");
   const [isChartPending, startTransition] = useTransition();
   const [analysis, setAnalysis] = useState<AnalysisReport | null>(detail?.analysis ?? null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+
+  const [memo, setMemo] = useState<StockMemo | null>(detail?.memo ?? null);
+  const [buyReason, setBuyReason] = useState(detail?.memo?.buyReason ?? "");
+  const [stopLoss, setStopLoss] = useState(detail?.memo?.stopLoss ?? "");
+  const [targetPrice, setTargetPrice] = useState(() => String(detail?.memo?.targetPrice ?? ""));
+  const [content, setContent] = useState(detail?.memo?.content ?? "");
+
+  const [isMemoPending, startMemoTransition] = useTransition();
+  const [memoMessage, setMemoMessage] = useState<string | null>(null);
+  const [memoError, setMemoError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setRange("3M");
+    setAnalysis(detail?.analysis ?? null);
+    setAnalysisError(null);
+
+    setMemo(detail?.memo ?? null);
+    setBuyReason(detail?.memo?.buyReason ?? "");
+    setStopLoss(detail?.memo?.stopLoss ?? "");
+    setTargetPrice(String(detail?.memo?.targetPrice ?? ""));
+    setContent(detail?.memo?.content ?? "");
+    setMemoMessage(null);
+    setMemoError(null);
+  }, [detail?.stock.ticker, detail?.memo, detail?.analysis]);
+
+  const normalizedBuyReason = buyReason.trim();
+  const normalizedStopLoss = stopLoss.trim();
+  const normalizedTargetPrice = String(targetPrice).trim();
+  const normalizedContent = content.trim();
+
+  const isMemoDirty =
+    normalizedBuyReason !== (memo?.buyReason ?? "") ||
+    normalizedStopLoss !== (memo?.stopLoss ?? "") ||
+    normalizedTargetPrice !== String(memo?.targetPrice ?? "") ||
+    normalizedContent !== (memo?.content ?? "");
+
+  const handleClose = useCallback(() => {
+    if (isMemoDirty) {
+      const ok = window.confirm("저장되지 않은 메모 변경사항이 있습니다. 닫을까요?");
+      if (!ok) {
+        return;
+      }
+    }
+
+    onClose();
+  }, [isMemoDirty, onClose]);
+
+  useEffect(() => {
+    if (!isOpen || !isMemoDirty) {
+      return;
+    }
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isMemoDirty, isOpen]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -255,19 +318,13 @@ export function StockDrawer({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        onClose();
+        handleClose();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
-
-  useEffect(() => {
-    setRange("3M");
-    setAnalysis(detail?.analysis ?? null);
-    setAnalysisError(null);
-  }, [detail?.stock.ticker]);
+  }, [isOpen, handleClose]);
 
   if (!detail) {
     return null;
@@ -280,6 +337,10 @@ export function StockDrawer({
   const isNegative = (changePercent ?? 0) < 0;
 
   async function handleAnalyze() {
+    if (!detail) {
+      return;
+    }
+
     setIsAnalyzing(true);
     setAnalysisError(null);
 
@@ -313,6 +374,48 @@ export function StockDrawer({
     }
   }
 
+  async function handleSaveMemo() {
+    if (!detail) {
+      return;
+    }
+
+    setMemoMessage(null);
+    setMemoError(null);
+
+    startMemoTransition(async () => {
+      try {
+        const formData = new FormData();
+        formData.set("stockId", detail.stock.id);
+        formData.set("buyReason", buyReason);
+        formData.set("stopLoss", stopLoss);
+        formData.set("targetPrice", String(targetPrice));
+        formData.set("content", content);
+
+        const result = await saveMemoAction(formData);
+
+        if (!result.ok) {
+          setMemoError(result.message ?? "메모 저장에 실패했습니다.");
+          return;
+        }
+
+        const nowIso = new Date().toISOString();
+        setMemo((prev) => ({
+          buyReason: normalizedBuyReason,
+          stopLoss: normalizedStopLoss,
+          targetPrice: normalizedTargetPrice,
+          content: normalizedContent,
+          createdAt: prev?.createdAt ?? nowIso,
+          updatedAt: nowIso,
+        }));
+
+        setMemoMessage(result.message ?? "저장 완료");
+        router.refresh();
+      } catch {
+        setMemoError("메모 저장에 실패했습니다.");
+      }
+    });
+  }
+
   return (
     <div
       className={`fixed inset-0 z-50 transition ${isOpen ? "pointer-events-auto" : "pointer-events-none"}`}
@@ -321,7 +424,7 @@ export function StockDrawer({
       <button
         type="button"
         aria-label="드로어 닫기"
-        onClick={onClose}
+        onClick={handleClose}
         className={`absolute inset-0 bg-black/55 transition ${isOpen ? "opacity-100" : "opacity-0"}`}
       />
       <aside
@@ -346,7 +449,7 @@ export function StockDrawer({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="rounded-[8px] border border-[#23252a] bg-[#141516] px-3 py-2 text-[14px] text-[#f7f8f8] transition hover:border-[#5e6ad2]"
           >
             닫기
@@ -555,6 +658,85 @@ export function StockDrawer({
                 </a>
               ))
             )}
+          </div>
+        </section>
+
+        <section className="mt-8">
+          <div className="mb-4">
+            <h3 className="text-[20px] font-medium tracking-[-0.03em]">투자 메모</h3>
+            <p className="mt-1 text-[13px] text-[#8a8f98]">
+              매수 이유, 손절 기준, 목표가, 자유 메모를 기록합니다.
+            </p>
+          </div>
+          <div className="rounded-[16px] border border-[#23252a] bg-[#0f1011] p-5">
+            <div className="mb-4">
+              {memo?.updatedAt ? (
+                <p className="text-[12px] text-[#8a8f98]">
+                  마지막 수정: {formatDateTime(memo.updatedAt)}
+                </p>
+              ) : (
+                <p className="text-[12px] text-[#8a8f98]">아직 작성된 메모가 없습니다.</p>
+              )}
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="flex flex-col gap-2 md:col-span-2">
+                <span className="text-[13px] text-[#d0d6e0]">매수 이유</span>
+                <textarea
+                  value={buyReason}
+                  onChange={(event) => setBuyReason(event.target.value)}
+                  placeholder="예: 실적 개선/밸류에이션 매력/성장 기대 등"
+                  className="min-h-[90px] resize-none rounded-[8px] border border-[#23252a] bg-[#141516] px-3 py-2.5 text-[14px] text-[#f7f8f8] outline-none transition focus:border-[#5e6ad2] focus:ring-1 focus:ring-[#5e6ad2]"
+                />
+              </label>
+
+              <label className="flex flex-col gap-2">
+                <span className="text-[13px] text-[#d0d6e0]">손절 기준</span>
+                <input
+                  value={stopLoss}
+                  onChange={(event) => setStopLoss(event.target.value)}
+                  placeholder="예: -5% 또는 10,000원 등"
+                  className="rounded-[8px] border border-[#23252a] bg-[#141516] px-3 py-2.5 text-[14px] text-[#f7f8f8] outline-none transition focus:border-[#5e6ad2] focus:ring-1 focus:ring-[#5e6ad2]"
+                />
+              </label>
+
+              <label className="flex flex-col gap-2">
+                <span className="text-[13px] text-[#d0d6e0]">목표가</span>
+                <input
+                  value={targetPrice}
+                  onChange={(event) => setTargetPrice(event.target.value)}
+                  placeholder="예: 15,000원 또는 가격대/기간"
+                  className="rounded-[8px] border border-[#23252a] bg-[#141516] px-3 py-2.5 text-[14px] text-[#f7f8f8] outline-none transition focus:border-[#5e6ad2] focus:ring-1 focus:ring-[#5e6ad2]"
+                />
+              </label>
+
+              <label className="flex flex-col gap-2 md:col-span-2">
+                <span className="text-[13px] text-[#d0d6e0]">자유 메모</span>
+                <textarea
+                  value={content}
+                  onChange={(event) => setContent(event.target.value)}
+                  placeholder="추가 생각/체크포인트 등을 자유롭게 남겨두세요."
+                  className="min-h-[90px] resize-none rounded-[8px] border border-[#23252a] bg-[#141516] px-3 py-2.5 text-[14px] text-[#f7f8f8] outline-none transition focus:border-[#5e6ad2] focus:ring-1 focus:ring-[#5e6ad2]"
+                />
+              </label>
+            </div>
+
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <div className="min-h-[18px] flex-1">
+                {memoError ? <p className="text-[13px] text-[#e5484d]">{memoError}</p> : null}
+                {!memoError && memoMessage ? (
+                  <p className="text-[13px] text-[#d0d6e0]">{memoMessage}</p>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={handleSaveMemo}
+                disabled={isMemoPending}
+                className="rounded-[8px] bg-[#5e6ad2] px-3 py-2 text-[14px] font-medium text-white transition hover:bg-[#828fff] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isMemoPending ? "저장 중..." : "저장"}
+              </button>
+            </div>
           </div>
         </section>
       </aside>
