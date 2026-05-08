@@ -13,7 +13,7 @@ import {
 } from "@/app/(routes)/stocks/actions";
 import { StockDrawer } from "@/components/features/StockDrawer";
 import { createClient } from "@/lib/supabase/client";
-import type { StockDashboardItem, StockDrawerDetail, StockStatus } from "@/types/stock";
+import type { StockDashboardItem, StockDrawerDetail, StockLookup, StockStatus } from "@/types/stock";
 
 type StocksManagerProps = {
   initialStocks: StockDashboardItem[];
@@ -329,7 +329,11 @@ export function StocksManager({
 
     startTransition(async () => {
       try {
-        const result = await lookupAction(formData);
+        const result = (await lookupAction(formData)) as {
+          lookup: StockLookup | null;
+          message?: string | null;
+          error?: string;
+        };
 
         if (!result?.lookup) {
           setFeedback("종목을 찾을 수 없습니다.");

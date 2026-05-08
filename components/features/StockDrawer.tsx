@@ -288,7 +288,7 @@ export function StockDrawer({
       setIsVisible(true);
       setIsClosing(false);
     }
-  }, [isOpen, handleClose]);
+  }, [isOpen]);
 
   useEffect(() => {
     setRange("3M");
@@ -323,7 +323,7 @@ export function StockDrawer({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, handleClose]);
 
   if (!isVisible || !renderedDetail) {
     return null;
