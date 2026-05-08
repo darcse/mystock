@@ -2,10 +2,11 @@
 
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import type { LookupState } from "@/app/(routes)/stocks/action-types";
+import { logoutAction } from "@/app/(routes)/login/actions";
 import {
   createStockAction,
   deleteStockAction,
-  initialLookupState,
   lookupStockAction,
   toggleStockStatusAction,
 } from "@/app/(routes)/stocks/actions";
@@ -25,6 +26,11 @@ type StockItem = {
 type StocksManagerProps = {
   initialStocks: StockItem[];
   isAuthenticated: boolean;
+};
+
+const initialLookupState: LookupState = {
+  lookup: null,
+  message: null,
 };
 
 export function StocksManager({
@@ -117,16 +123,28 @@ export function StocksManager({
   return (
     <section className="mx-auto flex w-full max-w-6xl flex-col gap-6">
       <header className="flex flex-col gap-3 rounded-[24px] border border-[#23252a] bg-[#0f1011] p-6 text-[#f7f8f8] shadow-[0_0_0_1px_rgba(255,255,255,0.01)]">
-        <div className="flex flex-col gap-2">
-          <span className="text-[12px] font-medium uppercase tracking-[0.28em] text-[#8a8f98]">
-            Stock Registry
-          </span>
-          <h1 className="text-[28px] font-semibold tracking-[-0.03em]">
-            보유·관심 종목 관리
-          </h1>
-          <p className="max-w-3xl text-[14px] leading-6 text-[#d0d6e0]">
-            티커를 조회해 기업명과 시장 정보를 확인한 뒤 종목을 저장하고, 보유 상태와 삭제를 바로 관리할 수 있습니다.
-          </p>
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="flex flex-col gap-2">
+            <span className="text-[12px] font-medium uppercase tracking-[0.28em] text-[#8a8f98]">
+              Stock Registry
+            </span>
+            <h1 className="text-[28px] font-semibold tracking-[-0.03em]">
+              보유·관심 종목 관리
+            </h1>
+            <p className="max-w-3xl text-[14px] leading-6 text-[#d0d6e0]">
+              티커를 조회해 기업명과 시장 정보를 확인한 뒤 종목을 저장하고, 보유 상태와 삭제를 바로 관리할 수 있습니다.
+            </p>
+          </div>
+          {isAuthenticated ? (
+            <form action={logoutAction}>
+              <button
+                type="submit"
+                className="rounded-[8px] border border-[#23252a] bg-[#141516] px-3 py-2 text-[14px] font-medium text-[#f7f8f8] transition hover:border-[#5e6ad2] hover:text-white"
+              >
+                로그아웃
+              </button>
+            </form>
+          ) : null}
         </div>
         {!isAuthenticated ? (
           <div className="rounded-[12px] border border-[#3e3e44] bg-[#141516] px-4 py-3 text-[13px] text-[#d0d6e0]">

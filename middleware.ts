@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/supabase";
 
 export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
   const response = NextResponse.next({
     request,
   });
@@ -29,13 +30,17 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    return NextResponse.redirect(new URL("/", request.url));
+  if (!user && pathname.startsWith("/stocks")) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  if (user && pathname === "/login") {
+    return NextResponse.redirect(new URL("/stocks", request.url));
   }
 
   return response;
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*"],
+  matcher: ["/login", "/stocks/:path*"],
 };

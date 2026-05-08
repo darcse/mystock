@@ -1,25 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type {
+  LookupState,
+  MutationResult,
+} from "@/app/(routes)/stocks/action-types";
 import { createClient } from "@/lib/supabase/server";
-import { getStockLookup, type StockLookup } from "@/lib/yahoo";
+import { getStockLookup } from "@/lib/yahoo";
 
 type StockStatus = "holding" | "watching";
-
-export type LookupState = {
-  lookup: StockLookup | null;
-  message: string | null;
-};
-
-export type MutationResult = {
-  ok: boolean;
-  message: string | null;
-};
-
-export const initialLookupState: LookupState = {
-  lookup: null,
-  message: null,
-};
 
 function normalizeTicker(value: FormDataEntryValue | null) {
   return String(value ?? "").trim().toUpperCase();
