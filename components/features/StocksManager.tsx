@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { LogOut, RefreshCw } from "lucide-react";
+import { Loader2, LogOut, RefreshCw } from "lucide-react";
 import type { LookupState } from "@/app/(routes)/stocks/action-types";
 import { logoutAction } from "@/app/(routes)/login/actions";
 import {
@@ -51,12 +51,16 @@ export function StocksManager({
     ticker: string;
   } | null>(null);
   const [localizedNames, setLocalizedNames] = useState<Record<string, string>>({});
+  const [isDashboardRefreshing, setIsDashboardRefreshing] = useState(false);
+  const [isDrawerLoading, setIsDrawerLoading] = useState(false);
+  const [isDrawerRefreshing, setIsDrawerRefreshing] = useState(false);
   const [lookupState, lookupAction, isLookupPending] = useActionState(
     lookupStockAction,
     initialLookupState,
   );
   const [isPending, startTransition] = useTransition();
   const normalizedTicker = ticker.trim().toUpperCase();
+  const selectedTickerInQuery = searchParams.get("ticker")?.trim().toUpperCase() ?? null;
   const activeLookup =
     lookupState.lookup && lookupState.lookup.ticker === normalizedTicker
       ? lookupState.lookup
@@ -200,6 +204,26 @@ export function StocksManager({
     };
   }, [krxStocks, ticker]);
 
+  useEffect(() => {
+    if (!isDashboardRefreshing) {
+      return;
+    }
+    setIsDashboardRefreshing(false);
+  }, [initialStocks, isDashboardRefreshing]);
+
+  useEffect(() => {
+    if (!selectedTickerInQuery) {
+      setIsDrawerLoading(false);
+      setIsDrawerRefreshing(false);
+      return;
+    }
+
+    if (selectedDetail?.stock.ticker === selectedTickerInQuery) {
+      setIsDrawerLoading(false);
+      setIsDrawerRefreshing(false);
+    }
+  }, [selectedDetail?.stock.ticker, selectedTickerInQuery]);
+
   async function handleSave(status: StockStatus) {
     const formData = new FormData();
     formData.set("ticker", activeLookup?.ticker ?? ticker);
@@ -330,6 +354,13 @@ export function StocksManager({
   }
 
   function updateDrawerTicker(nextTicker: string | null) {
+    if (nextTicker) {
+      setIsDrawerLoading(true);
+    } else {
+      setIsDrawerLoading(false);
+      setIsDrawerRefreshing(false);
+    }
+
     const params = new URLSearchParams(searchParams.toString());
 
     if (nextTicker) {
@@ -341,6 +372,20 @@ export function StocksManager({
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, {
       scroll: false,
+    });
+  }
+
+  function handleDashboardRefresh() {
+    setIsDashboardRefreshing(true);
+    startTransition(() => {
+      router.refresh();
+    });
+  }
+
+  function handleDrawerRefresh() {
+    setIsDrawerRefreshing(true);
+    startTransition(() => {
+      router.refresh();
     });
   }
 
@@ -364,10 +409,14 @@ export function StocksManager({
               <button
                 type="button"
                 aria-label="새로고침"
-                onClick={() => router.refresh()}
+                onClick={handleDashboardRefresh}
                 className="inline-flex h-10 w-10 items-center justify-center rounded-[8px] border border-[#23252a] bg-[#141516] text-[#f7f8f8] transition hover:border-[#5e6ad2]"
               >
-                <RefreshCw size={18} />
+                {isDashboardRefreshing ? (
+                  <Loader2 size={18} className="animate-spin text-[#5e6ad2]" />
+                ) : (
+                  <RefreshCw size={18} />
+                )}
               </button>
               <form action={logoutAction}>
                 <button
@@ -639,7 +688,18 @@ export function StocksManager({
         isOpen={Boolean(selectedDetail)}
         onClose={() => updateDrawerTicker(null)}
         onDelete={handleDelete}
+        onRefresh={handleDrawerRefresh}
+        isQuoteRefreshing={isDrawerRefreshing}
       />
+      {isDrawerLoading && !selectedDetail ? (
+        <div className="pointer-events-none fixed inset-0 z-[55] flex justify-end">
+          <div className="h-full w-full max-w-[760px] border-l border-[#23252a] bg-[#010102]/96 p-6">
+            <div className="flex h-full items-center justify-center">
+              <Loader2 size={28} className="animate-spin text-[#5e6ad2]" />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

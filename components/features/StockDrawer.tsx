@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronUp, RefreshCw, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, RefreshCw, Trash2 } from "lucide-react";
 import type { AnalysisReport, StockChartPoint, StockDrawerDetail, StockMemo } from "@/types/stock";
 import { saveMemoAction } from "@/app/(routes)/stocks/actions";
 
@@ -13,6 +13,8 @@ type StockDrawerProps = {
   isOpen: boolean;
   onClose: () => void;
   onDelete: (stockId: string, stockName: string) => void | Promise<void>;
+  onRefresh: () => void;
+  isQuoteRefreshing: boolean;
 };
 
 const chartRanges: ChartRange[] = ["1M", "3M", "6M"];
@@ -247,6 +249,8 @@ export function StockDrawer({
   isOpen,
   onClose,
   onDelete,
+  onRefresh,
+  isQuoteRefreshing,
 }: StockDrawerProps) {
   const router = useRouter();
   const [renderedDetail, setRenderedDetail] = useState<StockDrawerDetail | null>(detail);
@@ -484,10 +488,14 @@ export function StockDrawer({
             <button
               type="button"
               aria-label="드로어 새로고침"
-              onClick={() => router.refresh()}
+              onClick={onRefresh}
               className="inline-flex h-10 w-10 items-center justify-center rounded-[8px] border border-[#23252a] bg-[#141516] text-[#f7f8f8] transition hover:border-[#5e6ad2]"
             >
-              <RefreshCw size={18} />
+              {isQuoteRefreshing ? (
+                <Loader2 size={18} className="animate-spin text-[#5e6ad2]" />
+              ) : (
+                <RefreshCw size={18} />
+              )}
             </button>
             <button
               type="button"
@@ -500,20 +508,25 @@ export function StockDrawer({
         </div>
 
         <div className="mt-6 rounded-[16px] border border-[#23252a] bg-[#0f1011] p-5">
-          <div className="grid gap-4 md:grid-cols-4">
-            <div>
-              <p className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">현재가</p>
-              <p className="mt-2 text-[30px] font-semibold tracking-[-0.04em]">
+          <div className="grid gap-4 md:grid-cols-4 md:gap-x-8">
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2">
+                <p className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">현재가</p>
+                {isQuoteRefreshing ? (
+                  <Loader2 size={14} className="animate-spin text-[#5e6ad2]" />
+                ) : null}
+              </div>
+              <p className="mt-2 flex min-h-[44px] items-end text-[30px] font-semibold leading-none tracking-[-0.04em]">
                 {formatPrice(quote?.marketPrice ?? null, quote?.currency)}
               </p>
               {renderedDetail.stockQuoteError ? (
                 <p className="mt-2 text-[13px] text-[#e5484d]">{renderedDetail.stockQuoteError}</p>
               ) : null}
             </div>
-            <div>
+            <div className="flex flex-col">
               <p className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">등락률</p>
               <p
-                className="mt-2 text-[22px] font-medium tracking-[-0.03em]"
+                className="mt-2 flex min-h-[44px] items-end text-[22px] font-medium leading-none tracking-[-0.03em]"
                 style={{
                   color: isPositive ? "#27a644" : isNegative ? "#e5484d" : "#f7f8f8",
                 }}
@@ -521,15 +534,15 @@ export function StockDrawer({
                 {formatSignedPercent(changePercent)}
               </p>
             </div>
-            <div>
+            <div className="flex flex-col">
               <p className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">52주 고가</p>
-              <p className="mt-2 text-[22px] font-medium tracking-[-0.03em]">
+              <p className="mt-2 flex min-h-[44px] items-end text-[22px] font-medium leading-none tracking-[-0.03em]">
                 {formatPrice(quote?.fiftyTwoWeekHigh ?? null, quote?.currency)}
               </p>
             </div>
-            <div>
+            <div className="flex flex-col">
               <p className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">52주 저가</p>
-              <p className="mt-2 text-[22px] font-medium tracking-[-0.03em]">
+              <p className="mt-2 flex min-h-[44px] items-end text-[22px] font-medium leading-none tracking-[-0.03em]">
                 {formatPrice(quote?.fiftyTwoWeekLow ?? null, quote?.currency)}
               </p>
             </div>
