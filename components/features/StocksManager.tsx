@@ -329,7 +329,7 @@ export function StocksManager({
 
     startTransition(async () => {
       try {
-        const result = (await lookupAction(formData)) as {
+        const result = (await lookupAction(formData)) as unknown as {
           lookup: StockLookup | null;
           message?: string | null;
           error?: string;
@@ -340,7 +340,7 @@ export function StocksManager({
           return;
         }
 
-        setFeedback(result.message);
+        setFeedback(result.message ?? null);
       } catch {
         setFeedback("종목을 찾을 수 없습니다.");
       }
