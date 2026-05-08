@@ -11,17 +11,23 @@ export type Database = {
     Tables: {
       analyses: {
         Row: {
+          created_at: string;
           id: string;
+          summary: string | null;
           stock_id: string;
           user_id: string;
         };
         Insert: {
+          created_at?: string;
           id?: string;
+          summary?: string | null;
           stock_id: string;
           user_id: string;
         };
         Update: {
+          created_at?: string;
           id?: string;
+          summary?: string | null;
           stock_id?: string;
           user_id?: string;
         };

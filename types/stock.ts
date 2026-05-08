@@ -16,6 +16,12 @@ export type StockItem = {
   updatedAt: string;
 };
 
+export type StockDashboardItem = StockItem & {
+  latestAnalysisSummary: string | null;
+  quote: StockQuote | null;
+  quoteError: string | null;
+};
+
 export type StockQuote = {
   symbol: string;
   shortName: string;

@@ -1,15 +1,7 @@
 import { StocksManager } from "@/components/features/StocksManager";
+import { getStockDashboardQuote } from "@/lib/yahoo";
 import { createClient } from "@/lib/supabase/server";
-
-type StockItem = {
-  id: string;
-  ticker: string;
-  name: string;
-  market: string;
-  status: "holding" | "watching";
-  createdAt: string;
-  updatedAt: string;
-};
+import type { StockDashboardItem, StockItem } from "@/types/stock";
 
 function mapStockItem(stock: {
   created_at: string;
@@ -37,7 +29,7 @@ export default async function StocksPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  let stocks: StockItem[] = [];
+  let stocks: StockDashboardItem[] = [];
 
   if (user) {
     const { data } = await supabase
@@ -45,7 +37,36 @@ export default async function StocksPage() {
       .select("id, ticker, name, market, status, created_at, updated_at")
       .order("created_at", { ascending: false });
 
-    stocks = (data ?? []).map(mapStockItem);
+    const stockItems = (data ?? []).map(mapStockItem);
+    const stockIds = stockItems.map((stock) => stock.id);
+    const latestSummaryByStockId = new Map<string, string | null>();
+
+    if (stockIds.length > 0) {
+      const { data: analyses } = await supabase
+        .from("analyses")
+        .select("stock_id, summary, created_at")
+        .in("stock_id", stockIds)
+        .order("created_at", { ascending: false });
+
+      for (const analysis of analyses ?? []) {
+        if (!latestSummaryByStockId.has(analysis.stock_id)) {
+          latestSummaryByStockId.set(analysis.stock_id, analysis.summary);
+        }
+      }
+    }
+
+    stocks = await Promise.all(
+      stockItems.map(async (stock) => {
+        const { quote, quoteError } = await getStockDashboardQuote(stock.ticker);
+
+        return {
+          ...stock,
+          latestAnalysisSummary: latestSummaryByStockId.get(stock.id) ?? null,
+          quote,
+          quoteError,
+        };
+      }),
+    );
   }
 
   return (

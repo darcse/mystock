@@ -1,2 +1,3 @@
 [2026-05-08] [Codex] STOCK-001, STOCK-002, STOCK-003 구현 완료: 종목 조회/저장/삭제/상태 토글 UI 및 서버 액션 추가 | passes: 변경 없음
 [2026-05-08] [Codex] AUTH-001, AUTH-002 구현 완료: 이메일 로그인/로그아웃 및 /stocks 보호 라우팅 추가 | passes: 변경 없음
+[2026-05-08] [Codex] DASHBOARD-001, DASHBOARD-002, DASHBOARD-003 구현 완료: 종목 카드 대시보드, 시세/AI 요약, 상세 이동 추가 | passes: 변경 없음
