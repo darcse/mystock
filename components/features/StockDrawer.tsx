@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronUp, Loader2, RefreshCw, Trash2 } from "lucide-react";
 import type { AnalysisReport, StockChartPoint, StockDrawerDetail, StockMemo } from "@/types/stock";
@@ -13,13 +13,11 @@ type StockDrawerProps = {
   isOpen: boolean;
   onClose: () => void;
   onDelete: (stockId: string, stockName: string) => void | Promise<void>;
-  onRefresh: () => void;
-  isQuoteRefreshing: boolean;
+  onRefresh: () => void | Promise<void>;
+  isQuoteRefreshing?: boolean;
 };
 
 const chartRanges: ChartRange[] = ["1M", "3M", "6M"];
-const DRAWER_ANIMATION_MS = 240;
-
 function formatPrice(value: number | null, currency: string | undefined) {
   if (value === null) {
     return "--";
@@ -250,7 +248,7 @@ export function StockDrawer({
   onClose,
   onDelete,
   onRefresh,
-  isQuoteRefreshing,
+  isQuoteRefreshing: _isQuoteRefreshing = false,
 }: StockDrawerProps) {
   const router = useRouter();
   const [renderedDetail, setRenderedDetail] = useState<StockDrawerDetail | null>(detail);
@@ -271,6 +269,14 @@ export function StockDrawer({
   const [memoMessage, setMemoMessage] = useState<string | null>(null);
   const [memoError, setMemoError] = useState<string | null>(null);
   const [isDisclosuresOpen, setIsDisclosuresOpen] = useState(false);
+  const [isQuoteRefreshing, setIsQuoteRefreshing] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+  const handleClose = () => {
+    if (isClosing || !isVisible) {
+      return;
+    }
+    setIsClosing(true);
+  };
 
   useEffect(() => {
     if (detail) {
@@ -279,18 +285,11 @@ export function StockDrawer({
   }, [detail]);
 
   useEffect(() => {
-    if (isOpen && detail) {
+    if (isOpen) {
       setIsVisible(true);
-      return;
+      setIsClosing(false);
     }
-
-    if (!isOpen) {
-      const timeout = window.setTimeout(() => {
-        setIsVisible(false);
-      }, DRAWER_ANIMATION_MS);
-      return () => window.clearTimeout(timeout);
-    }
-  }, [detail, isOpen]);
+  }, [isOpen, onClose]);
 
   useEffect(() => {
     setRange("3M");
@@ -312,37 +311,6 @@ export function StockDrawer({
   const normalizedTargetPrice = String(targetPrice).trim();
   const normalizedContent = content.trim();
 
-  const isMemoDirty =
-    normalizedBuyReason !== (memo?.buyReason ?? "") ||
-    normalizedStopLoss !== (memo?.stopLoss ?? "") ||
-    normalizedTargetPrice !== String(memo?.targetPrice ?? "") ||
-    normalizedContent !== (memo?.content ?? "");
-
-  const handleClose = useCallback(() => {
-    if (isMemoDirty) {
-      const ok = window.confirm("저장되지 않은 메모 변경사항이 있습니다. 닫을까요?");
-      if (!ok) {
-        return;
-      }
-    }
-
-    onClose();
-  }, [isMemoDirty, onClose]);
-
-  useEffect(() => {
-    if (!isOpen || !isMemoDirty) {
-      return;
-    }
-
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [isMemoDirty, isOpen]);
-
   useEffect(() => {
     if (!isOpen) {
       return;
@@ -356,7 +324,7 @@ export function StockDrawer({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, handleClose]);
+  }, [isOpen, onClose]);
 
   if (!isVisible || !renderedDetail) {
     return null;
@@ -448,24 +416,51 @@ export function StockDrawer({
     });
   }
 
+  const handleRefresh = async () => {
+    setIsQuoteRefreshing(true);
+    try {
+      await Promise.resolve(onRefresh());
+    } catch {
+      // 새로고침 실패 시에도 스피너는 반드시 종료한다.
+    } finally {
+      setIsQuoteRefreshing(false);
+    }
+  };
+
   return (
     <div
-      className={`fixed inset-0 z-50 transition ${isOpen ? "pointer-events-auto" : "pointer-events-none"}`}
-      aria-hidden={!isOpen}
+      className={`fixed inset-0 z-50 transition ${isVisible ? "pointer-events-auto" : "pointer-events-none"}`}
+      aria-hidden={!isVisible}
     >
       <button
         type="button"
         aria-label="드로어 닫기"
         onClick={handleClose}
-        className={`absolute inset-0 bg-black/55 transition-opacity duration-[240ms] ease-out ${isOpen ? "opacity-100" : "opacity-0"}`}
+        className={`absolute inset-0 bg-black/55 transition-opacity duration-[180ms] ease-out ${isOpen && !isClosing ? "opacity-100" : "opacity-0"}`}
       />
       <aside
-        className={`absolute right-0 top-0 h-full w-full max-w-[760px] overflow-y-auto border-l border-[#23252a] bg-[#010102] p-6 text-[#f7f8f8] shadow-[-24px_0_80px_rgba(0,0,0,0.45)] transition-transform duration-[240ms] ease-out ${isOpen ? "translate-x-0" : "translate-x-full"}`}
+        onTransitionEnd={(event) => {
+          if (event.target !== event.currentTarget || event.propertyName !== "transform") {
+            return;
+          }
+
+          if (isClosing) {
+            setIsClosing(false);
+            setIsVisible(false);
+            onClose();
+            return;
+          }
+
+          if (!isOpen) {
+            setIsVisible(false);
+          }
+        }}
+        className={`absolute right-0 top-0 h-full w-full max-w-[760px] overflow-y-auto border-l border-[#23252a] bg-[#010102] p-6 text-[#f7f8f8] shadow-[-24px_0_80px_rgba(0,0,0,0.45)] transition-transform duration-[180ms] ease-out ${isOpen && !isClosing ? "translate-x-0" : "translate-x-full"}`}
       >
         <div className="flex items-start justify-between gap-4">
-          <div className="flex flex-col gap-2">
+          <div className="min-w-0 flex-1 flex-col gap-2">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-[28px] font-semibold tracking-[-0.03em]">
+              <h2 className="min-w-0 break-words text-[28px] font-semibold tracking-[-0.03em]">
                 {renderedDetail.stock.name}
               </h2>
               <span className="rounded-full border border-[#23252a] bg-[#141516] px-2.5 py-1 font-mono text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">
@@ -476,7 +471,7 @@ export function StockDrawer({
               {renderedDetail.stock.status === "holding" ? "보유 종목" : "관심 종목"}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="shrink-0 flex items-center gap-2">
             <button
               type="button"
               aria-label="종목 삭제"
@@ -488,7 +483,7 @@ export function StockDrawer({
             <button
               type="button"
               aria-label="드로어 새로고침"
-              onClick={onRefresh}
+              onClick={handleRefresh}
               className="inline-flex h-10 w-10 items-center justify-center rounded-[8px] border border-[#23252a] bg-[#141516] text-[#f7f8f8] transition hover:border-[#5e6ad2]"
             >
               {isQuoteRefreshing ? (

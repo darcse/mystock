@@ -1,8 +1,8 @@
 "use client";
 
-import { useActionState, useEffect, useState, useTransition } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Loader2, LogOut, RefreshCw } from "lucide-react";
+import { Loader2, LogOut, RefreshCw, X } from "lucide-react";
 import type { LookupState } from "@/app/(routes)/stocks/action-types";
 import { logoutAction } from "@/app/(routes)/login/actions";
 import {
@@ -20,6 +20,9 @@ type StocksManagerProps = {
   isAuthenticated: boolean;
   selectedDetail: StockDrawerDetail | null;
 };
+
+type DashboardFilter = "all" | "holding" | "watching";
+type DashboardSort = "change" | "name" | "created" | "price";
 
 const initialLookupState: LookupState = {
   lookup: null,
@@ -44,6 +47,7 @@ export function StocksManager({
     Array<{ name: string; market: string; code: string; ticker: string }>
   >([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [debouncedSearchInput, setDebouncedSearchInput] = useState("");
   const [selectedKrxStock, setSelectedKrxStock] = useState<{
     name: string;
     market: string;
@@ -51,6 +55,8 @@ export function StocksManager({
     ticker: string;
   } | null>(null);
   const [localizedNames, setLocalizedNames] = useState<Record<string, string>>({});
+  const [dashboardFilter, setDashboardFilter] = useState<DashboardFilter>("all");
+  const [dashboardSort, setDashboardSort] = useState<DashboardSort>("change");
   const [isDashboardRefreshing, setIsDashboardRefreshing] = useState(false);
   const [isDrawerLoading, setIsDrawerLoading] = useState(false);
   const [isDrawerRefreshing, setIsDrawerRefreshing] = useState(false);
@@ -59,6 +65,7 @@ export function StocksManager({
     initialLookupState,
   );
   const [isPending, startTransition] = useTransition();
+  const debounceTimerRef = useRef<number | null>(null);
   const normalizedTicker = ticker.trim().toUpperCase();
   const selectedTickerInQuery = searchParams.get("ticker")?.trim().toUpperCase() ?? null;
   const activeLookup =
@@ -133,76 +140,89 @@ export function StocksManager({
 
     const missing = koreanTickers.filter((ticker) => !localizedNames[ticker]);
 
-    if (missing.length === 0) {
+    if (missing.length === 0 || krxStocks.length === 0) {
       return;
     }
 
-    let cancelled = false;
+    const krxNameByTicker = new Map(
+      krxStocks
+        .filter((item) => /[가-힣]/.test(item.name))
+        .map((item) => [item.ticker.toUpperCase(), item.name]),
+    );
 
-    Promise.all(
-      missing.slice(0, 10).map(async (ticker) => {
-        try {
-          const query = ticker.replace(/\.(KS|KQ)$/i, "");
-          const response = await fetch(`/api/yahoo/search?q=${encodeURIComponent(query)}`);
-          const json = (await response.json()) as {
-            results?: Array<{ ticker: string; name: string }>;
-          };
-          const name = json.results?.[0]?.name ?? null;
-          if (!name || !/[가-힣]/.test(name)) {
-            return null;
-          }
-          return { ticker, name };
-        } catch {
-          return null;
-        }
-      }),
-    ).then((entries) => {
-      if (cancelled) {
-        return;
+    const next: Record<string, string> = {};
+    for (const ticker of missing) {
+      const mapped = krxNameByTicker.get(ticker.toUpperCase());
+      if (mapped) {
+        next[ticker] = mapped;
       }
-      const next: Record<string, string> = {};
-      for (const entry of entries) {
-        if (entry) {
-          next[entry.ticker] = entry.name;
-        }
-      }
-      if (Object.keys(next).length > 0) {
-        setLocalizedNames((prev) => ({ ...prev, ...next }));
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [initialStocks, localizedNames]);
+    }
+    if (Object.keys(next).length > 0) {
+      setLocalizedNames((prev) => ({ ...prev, ...next }));
+    }
+  }, [initialStocks, krxStocks, localizedNames]);
 
   useEffect(() => {
-    if (!ticker.trim()) {
+    if (debounceTimerRef.current) {
+      window.clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+
+    const trimmed = ticker.trim();
+    if (!trimmed) {
+      setDebouncedSearchInput("");
+      return;
+    }
+
+    debounceTimerRef.current = window.setTimeout(() => {
+      setDebouncedSearchInput(trimmed);
+      debounceTimerRef.current = null;
+    }, 300);
+
+    return () => {
+      if (debounceTimerRef.current) {
+        window.clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+    };
+  }, [ticker]);
+
+  useEffect(() => {
+    if (selectedTickerInQuery) {
+      return;
+    }
+
+    if (debounceTimerRef.current) {
+      window.clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+
+    setDebouncedSearchInput("");
+    setSearchResults([]);
+    setIsSearchOpen(false);
+  }, [selectedTickerInQuery]);
+
+  useEffect(() => {
+    if (!debouncedSearchInput) {
       setSearchResults([]);
       setIsSearchOpen(false);
       return;
     }
 
-    const query = ticker.trim();
+    const query = debouncedSearchInput;
     const upperQuery = query.toUpperCase();
-    const handle = window.setTimeout(() => {
-      const results = krxStocks
-        .filter(
-          (item) =>
-            item.name.includes(query) ||
-            item.code.includes(query) ||
-            item.ticker.toUpperCase().includes(upperQuery),
-        )
-        .slice(0, 8);
+    const results = krxStocks
+      .filter(
+        (item) =>
+          item.name.includes(query) ||
+          item.code.includes(query) ||
+          item.ticker.toUpperCase().includes(upperQuery),
+      )
+      .slice(0, 8);
 
-      setSearchResults(results);
-      setIsSearchOpen(true);
-    }, 250);
-
-    return () => {
-      window.clearTimeout(handle);
-    };
-  }, [krxStocks, ticker]);
+    setSearchResults(results);
+    setIsSearchOpen(true);
+  }, [debouncedSearchInput, krxStocks]);
 
   useEffect(() => {
     if (!isDashboardRefreshing) {
@@ -296,6 +316,41 @@ export function StocksManager({
     });
   }
 
+  function runLookup(nextTicker: string) {
+    const normalized = nextTicker.trim().toUpperCase();
+
+    if (!normalized) {
+      setFeedback("티커를 입력해 주세요.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.set("ticker", normalized);
+
+    startTransition(async () => {
+      try {
+        const result = await lookupAction(formData);
+
+        if (!result?.lookup) {
+          setFeedback("종목을 찾을 수 없습니다.");
+          return;
+        }
+
+        setFeedback(result.message);
+      } catch {
+        setFeedback("종목을 찾을 수 없습니다.");
+      }
+    });
+  }
+
+  function handleLookupSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const formData = new FormData(event.currentTarget);
+    const inputTicker = String(formData.get("ticker") ?? "");
+    runLookup(inputTicker);
+  }
+
   async function handleToggle(stockId: string, currentStatus: StockStatus) {
     const formData = new FormData();
     formData.set("stockId", stockId);
@@ -332,6 +387,40 @@ export function StocksManager({
   }
 
   const hasStocks = initialStocks.length > 0;
+
+  const filteredAndSortedStocks = useMemo(() => {
+    const filtered = initialStocks.filter((stock) => {
+      if (dashboardFilter === "all") {
+        return true;
+      }
+      return stock.status === dashboardFilter;
+    });
+
+    const sorted = [...filtered];
+    sorted.sort((a, b) => {
+      if (dashboardSort === "change") {
+        const aValue = a.quote?.marketChangePercent ?? Number.NEGATIVE_INFINITY;
+        const bValue = b.quote?.marketChangePercent ?? Number.NEGATIVE_INFINITY;
+        return bValue - aValue;
+      }
+
+      if (dashboardSort === "name") {
+        const aName = (localizedNames[a.ticker] ?? a.name).replace(/\s*\(.*?\)\s*$/, "");
+        const bName = (localizedNames[b.ticker] ?? b.name).replace(/\s*\(.*?\)\s*$/, "");
+        return aName.localeCompare(bName, "ko");
+      }
+
+      if (dashboardSort === "created") {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+
+      const aPrice = a.quote?.marketPrice ?? Number.NEGATIVE_INFINITY;
+      const bPrice = b.quote?.marketPrice ?? Number.NEGATIVE_INFINITY;
+      return bPrice - aPrice;
+    });
+
+    return sorted;
+  }, [dashboardFilter, dashboardSort, initialStocks, localizedNames]);
 
   function formatPrice(value: number | null, currency: string | undefined) {
     if (value === null) {
@@ -441,21 +530,56 @@ export function StocksManager({
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-end gap-3">
             <div className="relative flex min-w-[220px] flex-1 flex-col gap-2">
-              <span className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">종목 추가</span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">종목 추가</span>
+                <a
+                  href="https://www.ktb.co.kr/trading/popup/itemPop.jspx"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[12px] text-[#8a8f98] transition hover:text-[#d0d6e0]"
+                >
+                  종목코드 조회 ↗
+                </a>
+              </div>
               <input
                 name="ticker"
                 value={ticker}
                 onChange={(event) => setTicker(event.target.value.toUpperCase())}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    runLookup(ticker);
+                  }
+                }}
                 onFocus={() => setIsSearchOpen(true)}
                 onBlur={() => window.setTimeout(() => setIsSearchOpen(false), 120)}
                 placeholder="티커 입력 (예: 005930.KS, AAPL)"
-                className="h-11 rounded-[10px] border border-[#23252a] bg-[#141516] px-3 text-[14px] text-[#f7f8f8] outline-none transition focus:border-[#5e6ad2] focus:ring-1 focus:ring-[#5e6ad2]"
+                className="h-11 rounded-[10px] border border-[#23252a] bg-[#141516] px-3 pr-10 text-[14px] text-[#f7f8f8] outline-none transition focus:border-[#5e6ad2] focus:ring-1 focus:ring-[#5e6ad2]"
               />
+              {ticker.trim() ? (
+                <button
+                  type="button"
+                  aria-label="검색어 지우기"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    setTicker("");
+                    setSearchResults([]);
+                    setSelectedKrxStock(null);
+                  }}
+                  className="absolute right-2 top-[39px] inline-flex h-7 w-7 items-center justify-center rounded-[6px] text-[#8a8f98] transition hover:bg-[#23252a] hover:text-[#f7f8f8]"
+                >
+                  <X size={14} />
+                </button>
+              ) : null}
               {isSearchOpen ? (
                 <div className="absolute top-[78px] z-20 w-full overflow-hidden rounded-[12px] border border-[#23252a] bg-[#18191a] shadow-[0_18px_60px_rgba(0,0,0,0.5)]">
-                  {searchResults.length === 0 ? (
-                    <div className="px-4 py-3 text-[13px] text-[#8a8f98]">결과 없음</div>
-                  ) : (
+                  {isLookupPending ? (
+                    <div className="px-4 py-3 text-[13px] text-[#8a8f98]">조회 중...</div>
+                  ) : !ticker.trim() ? (
+                    <div className="px-4 py-3 text-[13px] text-[#8a8f98]">
+                      종목명 또는 종목코드를 입력해 주세요.
+                    </div>
+                  ) : searchResults.length > 0 ? (
                     searchResults.map((item) => (
                       <button
                         key={`${item.code}-${item.ticker}`}
@@ -482,12 +606,13 @@ export function StocksManager({
                         </span>
                       </button>
                     ))
-                  )}
+                  ) : null
+                  }
                 </div>
               ) : null}
             </div>
 
-            <form action={lookupAction} className="flex items-end gap-2">
+            <form onSubmit={handleLookupSubmit} className="flex items-end gap-2">
               <input type="hidden" name="ticker" value={ticker} />
               <button
                 type="submit"
@@ -551,13 +676,57 @@ export function StocksManager({
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-[20px] font-medium tracking-[-0.02em]">종목 대시보드</h2>
             <span className="rounded-full border border-[#23252a] bg-[#141516] px-2.5 py-1 text-[12px] text-[#8a8f98]">
-              {initialStocks.length} items
+              {filteredAndSortedStocks.length} items
             </span>
+          </div>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex rounded-full border border-[#23252a] bg-[#141516] p-1">
+              <button
+                type="button"
+                onClick={() => setDashboardFilter("all")}
+                className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition ${
+                  dashboardFilter === "all" ? "bg-[#0f1011] text-[#f7f8f8]" : "text-[#8a8f98]"
+                }`}
+              >
+                전체
+              </button>
+              <button
+                type="button"
+                onClick={() => setDashboardFilter("holding")}
+                className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition ${
+                  dashboardFilter === "holding" ? "bg-[#0f1011] text-[#f7f8f8]" : "text-[#8a8f98]"
+                }`}
+              >
+                보유
+              </button>
+              <button
+                type="button"
+                onClick={() => setDashboardFilter("watching")}
+                className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition ${
+                  dashboardFilter === "watching" ? "bg-[#0f1011] text-[#f7f8f8]" : "text-[#8a8f98]"
+                }`}
+              >
+                관심
+              </button>
+            </div>
+            <label className="flex items-center gap-2 text-[12px] text-[#8a8f98]">
+              정렬
+              <select
+                value={dashboardSort}
+                onChange={(event) => setDashboardSort(event.target.value as DashboardSort)}
+                className="h-8 rounded-full border border-[#23252a] bg-[#141516] px-3 text-[12px] text-[#f7f8f8] outline-none transition focus:border-[#5e6ad2]"
+              >
+                <option value="change">등락률순</option>
+                <option value="name">이름순</option>
+                <option value="created">등록순</option>
+                <option value="price">현재가순</option>
+              </select>
+            </label>
           </div>
 
           {hasStocks ? (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {initialStocks.map((stock) => {
+              {filteredAndSortedStocks.map((stock) => {
                 const isHolding = stock.status === "holding";
                 const changePercent = stock.quote?.marketChangePercent ?? null;
                 const isPositive = (changePercent ?? 0) > 0;
@@ -681,6 +850,11 @@ export function StocksManager({
               </p>
             </div>
           )}
+          {hasStocks && filteredAndSortedStocks.length === 0 ? (
+            <div className="mt-4 rounded-[16px] border border-dashed border-[#23252a] bg-[#141516] px-6 py-8 text-center">
+              <p className="text-[14px] text-[#d0d6e0]">선택한 필터에 해당하는 종목이 없습니다.</p>
+            </div>
+          ) : null}
         </div>
 
       <StockDrawer

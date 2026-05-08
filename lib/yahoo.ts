@@ -71,14 +71,19 @@ export async function getStockLookup(ticker: string): Promise<StockLookup | null
   try {
     const quote = (await yahooFinance.quote(
       normalizeTicker(ticker),
-    )) as YahooQuoteResult;
+    )) as YahooQuoteResult | null | undefined;
+
+    if (!quote) {
+      return null;
+    }
+
     return {
       ticker: normalizeTicker(ticker),
       name: (quote.shortName ?? quote.longName ?? normalizeTicker(ticker)) as string,
       market: (quote.fullExchangeName ?? quote.exchange ?? "Unknown") as string,
     };
-  } catch (error) {
-    throw new Error(toErrorMessage(error));
+  } catch {
+    return null;
   }
 }
 

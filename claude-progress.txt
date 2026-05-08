@@ -10,3 +10,4 @@
 [2026-05-08] [Codex] UI-007 구현 완료: StockDrawer 언마운트 지연 처리로 열림/닫힘 슬라이드 및 오버레이 페이드(240ms, ease-out) 애니메이션 안정화 | passes: 변경 없음
 [2026-05-08] [Codex] 한글명 마이그레이션 액션 추가: syncKoreanStockNamesAction 구현 및 StocksManager 헤더에 한글명 동기화 버튼 연결 | passes: 변경 없음
 [2026-05-08] [Codex] UI-008 구현 완료: 카드 클릭 드로어 로딩/대시보드 새로고침/드로어 새로고침에 Loader2 스피너(Primary #5e6ad2) 추가 | passes: 변경 없음
+[2026-05-08] [Codex] UI-009 구현 완료: 대시보드 보유/관심 필터 탭 및 등락률/이름/등록/현재가 클라이언트 정렬, 필터 결과 빈 상태 안내 추가 | passes: 변경 없음
