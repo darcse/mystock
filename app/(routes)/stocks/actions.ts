@@ -172,8 +172,7 @@ export async function deleteStockAction(formData: FormData): Promise<MutationRes
   const { error: deleteAnalysesError } = await supabase
     .from("analyses")
     .delete()
-    .eq("stock_id", stockId)
-    .eq("user_id", user.id);
+    .eq("stock_id", stockId);
 
   if (deleteAnalysesError) {
     return {
@@ -185,8 +184,7 @@ export async function deleteStockAction(formData: FormData): Promise<MutationRes
   const { error: deleteMemosError } = await supabase
     .from("memos")
     .delete()
-    .eq("stock_id", stockId)
-    .eq("user_id", user.id);
+    .eq("stock_id", stockId);
 
   if (deleteMemosError) {
     return {
