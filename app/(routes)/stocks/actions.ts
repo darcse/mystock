@@ -9,8 +9,22 @@ import type {
 } from "@/app/(routes)/stocks/action-types";
 import { createClient } from "@/lib/supabase/server";
 import { getStockLookup } from "@/lib/yahoo";
+import type { Database } from "@/types/supabase";
 
 type StockStatus = "holding" | "watching";
+
+type MemoSavePayload = {
+  content: string;
+  buy_reason: string;
+  stop_loss: string;
+  target_price: number | null;
+  shares: number | null;
+  avg_price: number | null;
+  updated_at: string;
+};
+
+type MemosInsert = Database["public"]["Tables"]["memos"]["Insert"];
+type MemosUpdate = Database["public"]["Tables"]["memos"]["Update"];
 
 function normalizeTicker(value: FormDataEntryValue | null) {
   return String(value ?? "").trim().toUpperCase();
@@ -281,7 +295,7 @@ export async function saveMemoAction(formData: FormData): Promise<MutationResult
   }
 
   const nowIso = new Date().toISOString();
-  const memoPayload = {
+  const memoPayload: MemoSavePayload = {
     content: content ?? "",
     buy_reason: buyReason ?? "",
     stop_loss: stopLoss ?? "",
@@ -301,7 +315,7 @@ export async function saveMemoAction(formData: FormData): Promise<MutationResult
   if (existingMemo) {
     const { error: updateError } = await supabase
       .from("memos")
-      .update(memoPayload)
+      .update(memoPayload as MemosUpdate)
       .eq("id", existingMemo.id)
       .eq("user_id", user.id);
 
@@ -318,7 +332,7 @@ export async function saveMemoAction(formData: FormData): Promise<MutationResult
       user_id: user.id,
       ...memoPayload,
       created_at: nowIso,
-    });
+    } as MemosInsert);
 
     if (insertError) {
       console.error("[saveMemoAction] memos insert failed", insertError);
