@@ -1,5 +1,12 @@
 export type StockStatus = "holding" | "watching";
 
+export type MarketIndexItem = {
+  symbol: string;
+  label: string;
+  value: number | null;
+  changePercent: number | null;
+};
+
 export type StockLookup = {
   ticker: string;
   name: string;

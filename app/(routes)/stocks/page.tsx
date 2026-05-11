@@ -1,10 +1,12 @@
 import { getDartDisclosures } from "@/lib/dart";
 import { getStockNews } from "@/lib/news";
 import { StocksManager } from "@/components/features/StocksManager";
-import { getStockChart, getStockDashboardQuote, getStockQuote } from "@/lib/yahoo";
+import { MarketIndicesBar } from "@/components/ui/MarketIndicesBar";
+import { getMarketIndices, getStockChart, getStockDashboardQuote, getStockQuote } from "@/lib/yahoo";
 import { createClient } from "@/lib/supabase/server";
 import type {
   AnalysisOpinion,
+  MarketIndexItem,
   StockDashboardItem,
   StockDrawerDetail,
   StockItem,
@@ -106,6 +108,7 @@ export default async function StocksPage({ searchParams }: StocksPageProps) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const marketIndices = await getMarketIndices().catch((): MarketIndexItem[] => []);
   const resolvedSearchParams = await searchParams;
   const selectedTicker = resolvedSearchParams.ticker?.trim().toUpperCase() ?? null;
 
@@ -163,6 +166,7 @@ export default async function StocksPage({ searchParams }: StocksPageProps) {
       <StocksManager
         initialStocks={stocks}
         isAuthenticated={Boolean(user)}
+        marketIndicesBar={<MarketIndicesBar indices={marketIndices} />}
         selectedDetail={selectedDetail}
       />
     </main>
