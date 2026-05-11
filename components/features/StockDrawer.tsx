@@ -318,6 +318,7 @@ export function StockDrawer({
   const [memoMessage, setMemoMessage] = useState<string | null>(null);
   const [memoError, setMemoError] = useState<string | null>(null);
   const [isDisclosuresOpen, setIsDisclosuresOpen] = useState(false);
+  const [isMemoSectionOpen, setIsMemoSectionOpen] = useState(false);
   const [isQuoteRefreshing, setIsQuoteRefreshing] = useState(false);
   const [isNewsRefreshing, setIsNewsRefreshing] = useState(false);
 
@@ -344,6 +345,7 @@ export function StockDrawer({
     setMemoMessage(null);
     setMemoError(null);
     setIsDisclosuresOpen(false);
+    setIsMemoSectionOpen(false);
   }, [renderedDetail?.stock.ticker, renderedDetail?.memo, renderedDetail?.analysis]);
 
   const normalizedBuyReason = buyReason.trim();
@@ -755,105 +757,121 @@ export function StockDrawer({
           <div className="flex min-h-0 min-w-0 flex-[4] flex-col border-l border-[#23252a] pl-6">
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <section className="mt-0">
-          <div className="mb-4">
-            <h3 className="text-[20px] font-medium tracking-[-0.03em]">투자 메모</h3>
-            <p className="mt-1 text-[13px] text-[#8a8f98]">
-              보유 수량·평균 단가, 매수 이유, 손절 기준, 목표가, 자유 메모를 기록합니다.
-            </p>
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => setIsMemoSectionOpen((prev) => !prev)}
+              className="min-w-0 flex-1 text-left"
+            >
+              <h3 className="text-[20px] font-medium tracking-[-0.03em]">투자 메모</h3>
+              <p className="mt-1 text-[13px] text-[#8a8f98]">
+                보유 수량·평균 단가, 매수 이유, 손절 기준, 목표가, 자유 메모를 기록합니다.
+              </p>
+            </button>
+            <button
+              type="button"
+              aria-label="투자 메모 펼치기/접기"
+              onClick={() => setIsMemoSectionOpen((prev) => !prev)}
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] border border-[#23252a] bg-[#141516] text-[#f7f8f8] transition hover:border-[#5e6ad2]"
+            >
+              {isMemoSectionOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+            </button>
           </div>
-          <div className="rounded-[16px] border border-[#23252a] bg-[#0f1011] p-5">
-            <div className="mb-4">
-              {memo?.updatedAt ? (
-                <p className="text-[12px] text-[#8a8f98]">
-                  마지막 수정: {formatDateTime(memo.updatedAt)}
-                </p>
-              ) : (
-                <p className="text-[12px] text-[#8a8f98]">아직 작성된 메모가 없습니다.</p>
-              )}
-            </div>
+          {isMemoSectionOpen ? (
+            <div className="mt-3 overflow-hidden rounded-[16px] border border-[#23252a] bg-[#0f1011] p-5">
+              <div className="mb-4">
+                {memo?.updatedAt ? (
+                  <p className="text-[12px] text-[#8a8f98]">
+                    마지막 수정: {formatDateTime(memo.updatedAt)}
+                  </p>
+                ) : (
+                  <p className="text-[12px] text-[#8a8f98]">아직 작성된 메모가 없습니다.</p>
+                )}
+              </div>
 
-            <div className="flex flex-col gap-4">
-              <div className="grid grid-cols-2 gap-4">
-                <label className="flex min-w-0 flex-col gap-2">
-                  <span className="text-[13px] text-[#d0d6e0]">보유 주식 수</span>
-                  <input
-                    inputMode="numeric"
-                    value={sharesInput}
-                    onChange={(event) => setSharesInput(event.target.value.replace(/\D/g, ""))}
-                    placeholder="예: 100"
-                    className="min-w-0 rounded-[8px] border border-[#23252a] bg-[#141516] px-3 py-2.5 text-[14px] text-[#f7f8f8] outline-none transition focus:border-[#5e6ad2] focus:ring-1 focus:ring-[#5e6ad2]"
+              <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <label className="flex min-w-0 flex-col gap-2">
+                    <span className="text-[13px] text-[#d0d6e0]">보유 주식 수</span>
+                    <input
+                      inputMode="numeric"
+                      value={sharesInput}
+                      onChange={(event) => setSharesInput(event.target.value.replace(/\D/g, ""))}
+                      placeholder="예: 100"
+                      className="min-w-0 rounded-[8px] border border-[#23252a] bg-[#141516] px-3 py-2.5 text-[14px] text-[#f7f8f8] outline-none transition focus:border-[#5e6ad2] focus:ring-1 focus:ring-[#5e6ad2]"
+                    />
+                  </label>
+                  <label className="flex min-w-0 flex-col gap-2">
+                    <span className="text-[13px] text-[#d0d6e0]">평균 매입 단가 (원)</span>
+                    <input
+                      inputMode="decimal"
+                      value={avgPriceInput}
+                      onChange={(event) => setAvgPriceInput(event.target.value.replace(/[^\d,]/g, ""))}
+                      placeholder="예: 70000"
+                      className="min-w-0 rounded-[8px] border border-[#23252a] bg-[#141516] px-3 py-2.5 text-[14px] text-[#f7f8f8] outline-none transition focus:border-[#5e6ad2] focus:ring-1 focus:ring-[#5e6ad2]"
+                    />
+                  </label>
+                </div>
+                <label className="flex flex-col gap-2">
+                  <span className="text-[13px] text-[#d0d6e0]">매수 이유</span>
+                  <textarea
+                    value={buyReason}
+                    onChange={(event) => setBuyReason(event.target.value)}
+                    placeholder="예: 실적 개선/밸류에이션 매력/성장 기대 등"
+                    className="min-h-[90px] resize-none rounded-[8px] border border-[#23252a] bg-[#141516] px-3 py-2.5 text-[14px] text-[#f7f8f8] outline-none transition focus:border-[#5e6ad2] focus:ring-1 focus:ring-[#5e6ad2]"
                   />
                 </label>
-                <label className="flex min-w-0 flex-col gap-2">
-                  <span className="text-[13px] text-[#d0d6e0]">평균 매입 단가 (원)</span>
-                  <input
-                    inputMode="decimal"
-                    value={avgPriceInput}
-                    onChange={(event) => setAvgPriceInput(event.target.value.replace(/[^\d,]/g, ""))}
-                    placeholder="예: 70000"
-                    className="min-w-0 rounded-[8px] border border-[#23252a] bg-[#141516] px-3 py-2.5 text-[14px] text-[#f7f8f8] outline-none transition focus:border-[#5e6ad2] focus:ring-1 focus:ring-[#5e6ad2]"
+
+                <div className="grid grid-cols-2 gap-4">
+                  <label className="flex min-w-0 flex-col gap-2">
+                    <span className="text-[13px] text-[#d0d6e0]">손절 기준</span>
+                    <input
+                      value={stopLoss}
+                      onChange={(event) => setStopLoss(event.target.value)}
+                      placeholder="예: -5% 또는 10,000원 등"
+                      className="min-w-0 rounded-[8px] border border-[#23252a] bg-[#141516] px-3 py-2.5 text-[14px] text-[#f7f8f8] outline-none transition focus:border-[#5e6ad2] focus:ring-1 focus:ring-[#5e6ad2]"
+                    />
+                  </label>
+                  <label className="flex min-w-0 flex-col gap-2">
+                    <span className="text-[13px] text-[#d0d6e0]">목표가</span>
+                    <input
+                      value={targetPrice}
+                      onChange={(event) => setTargetPrice(event.target.value)}
+                      placeholder="예: 15,000원 또는 가격대/기간"
+                      className="min-w-0 rounded-[8px] border border-[#23252a] bg-[#141516] px-3 py-2.5 text-[14px] text-[#f7f8f8] outline-none transition focus:border-[#5e6ad2] focus:ring-1 focus:ring-[#5e6ad2]"
+                    />
+                  </label>
+                </div>
+
+                <label className="flex flex-col gap-2">
+                  <span className="text-[13px] text-[#d0d6e0]">자유 메모</span>
+                  <textarea
+                    value={content}
+                    onChange={(event) => setContent(event.target.value)}
+                    placeholder="추가 생각/체크포인트 등을 자유롭게 남겨두세요."
+                    className="min-h-[90px] resize-none rounded-[8px] border border-[#23252a] bg-[#141516] px-3 py-2.5 text-[14px] text-[#f7f8f8] outline-none transition focus:border-[#5e6ad2] focus:ring-1 focus:ring-[#5e6ad2]"
                   />
                 </label>
               </div>
-              <label className="flex flex-col gap-2">
-                <span className="text-[13px] text-[#d0d6e0]">매수 이유</span>
-                <textarea
-                  value={buyReason}
-                  onChange={(event) => setBuyReason(event.target.value)}
-                  placeholder="예: 실적 개선/밸류에이션 매력/성장 기대 등"
-                  className="min-h-[90px] resize-none rounded-[8px] border border-[#23252a] bg-[#141516] px-3 py-2.5 text-[14px] text-[#f7f8f8] outline-none transition focus:border-[#5e6ad2] focus:ring-1 focus:ring-[#5e6ad2]"
-                />
-              </label>
 
-              <div className="grid grid-cols-2 gap-4">
-                <label className="flex min-w-0 flex-col gap-2">
-                  <span className="text-[13px] text-[#d0d6e0]">손절 기준</span>
-                  <input
-                    value={stopLoss}
-                    onChange={(event) => setStopLoss(event.target.value)}
-                    placeholder="예: -5% 또는 10,000원 등"
-                    className="min-w-0 rounded-[8px] border border-[#23252a] bg-[#141516] px-3 py-2.5 text-[14px] text-[#f7f8f8] outline-none transition focus:border-[#5e6ad2] focus:ring-1 focus:ring-[#5e6ad2]"
-                  />
-                </label>
-                <label className="flex min-w-0 flex-col gap-2">
-                  <span className="text-[13px] text-[#d0d6e0]">목표가</span>
-                  <input
-                    value={targetPrice}
-                    onChange={(event) => setTargetPrice(event.target.value)}
-                    placeholder="예: 15,000원 또는 가격대/기간"
-                    className="min-w-0 rounded-[8px] border border-[#23252a] bg-[#141516] px-3 py-2.5 text-[14px] text-[#f7f8f8] outline-none transition focus:border-[#5e6ad2] focus:ring-1 focus:ring-[#5e6ad2]"
-                  />
-                </label>
+              <div className="mt-4 flex items-center justify-between gap-3">
+                <div className="min-h-[18px] flex-1">
+                  {memoError ? <p className="text-[13px] text-[#e5484d]">{memoError}</p> : null}
+                  {!memoError && memoMessage ? (
+                    <p className="text-[13px] text-[#d0d6e0]">{memoMessage}</p>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSaveMemo}
+                  disabled={isMemoPending}
+                  className="rounded-[8px] bg-[#5e6ad2] px-3 py-2 text-[14px] font-medium text-white transition hover:bg-[#828fff] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isMemoPending ? "저장 중..." : "저장"}
+                </button>
               </div>
-
-              <label className="flex flex-col gap-2">
-                <span className="text-[13px] text-[#d0d6e0]">자유 메모</span>
-                <textarea
-                  value={content}
-                  onChange={(event) => setContent(event.target.value)}
-                  placeholder="추가 생각/체크포인트 등을 자유롭게 남겨두세요."
-                  className="min-h-[90px] resize-none rounded-[8px] border border-[#23252a] bg-[#141516] px-3 py-2.5 text-[14px] text-[#f7f8f8] outline-none transition focus:border-[#5e6ad2] focus:ring-1 focus:ring-[#5e6ad2]"
-                />
-              </label>
             </div>
-
-            <div className="mt-4 flex items-center justify-between gap-3">
-              <div className="min-h-[18px] flex-1">
-                {memoError ? <p className="text-[13px] text-[#e5484d]">{memoError}</p> : null}
-                {!memoError && memoMessage ? (
-                  <p className="text-[13px] text-[#d0d6e0]">{memoMessage}</p>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                onClick={handleSaveMemo}
-                disabled={isMemoPending}
-                className="rounded-[8px] bg-[#5e6ad2] px-3 py-2 text-[14px] font-medium text-white transition hover:bg-[#828fff] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isMemoPending ? "저장 중..." : "저장"}
-              </button>
-            </div>
-          </div>
+          ) : null}
         </section>
 
         <section className="mt-8">
