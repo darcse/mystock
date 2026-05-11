@@ -119,6 +119,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "분석 대상 종목을 찾을 수 없습니다." }, { status: 404 });
     }
 
+    const { data: memoRow } = await supabase
+      .from("memos")
+      .select("shares, avg_price")
+      .eq("stock_id", stockId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
     const [quoteResult, newsResult, disclosuresResult] = await Promise.allSettled([
       getStockQuote(ticker),
       getStockNews({ name, ticker }),
@@ -128,6 +135,19 @@ export async function POST(request: Request) {
     const quote = quoteResult.status === "fulfilled" ? quoteResult.value : null;
     const news = newsResult.status === "fulfilled" ? newsResult.value : [];
     const disclosures = disclosuresResult.status === "fulfilled" ? disclosuresResult.value : [];
+
+    const memoShares = memoRow?.shares ?? null;
+    const memoAvgPrice = memoRow?.avg_price ?? null;
+    const marketPrice = quote?.marketPrice ?? null;
+    let holdingContextLine: string | null = null;
+
+    if (memoAvgPrice != null && memoAvgPrice > 0 && marketPrice != null && Number.isFinite(marketPrice)) {
+      const returnPct = ((marketPrice - memoAvgPrice) / memoAvgPrice) * 100;
+      const sharesPart =
+        memoShares != null && memoShares > 0 ? `현재 ${memoShares}주 보유, ` : "보유 주식 수 미입력, ";
+      const pnlLabel = returnPct >= 0 ? "수익" : "손실";
+      holdingContextLine = `${sharesPart}평균단가 ${memoAvgPrice}원, 현재 ${returnPct.toFixed(2)}% ${pnlLabel} 중`;
+    }
 
     const apiKey = process.env.GEMINI_API_KEY;
 
@@ -155,6 +175,9 @@ export async function POST(request: Request) {
       `등락률: ${quote?.marketChangePercent ?? "데이터 없음"}`,
       `52주 고가: ${quote?.fiftyTwoWeekHigh ?? "데이터 없음"}`,
       `52주 저가: ${quote?.fiftyTwoWeekLow ?? "데이터 없음"}`,
+      ...(holdingContextLine
+        ? ["", "[투자자 보유/매입 단가 맥락]", holdingContextLine, "위 맥락을 참고하되, 최종 opinion은 시장·뉴스·공시 근거가 우선이다."]
+        : []),
       "",
       "[최신 뉴스 5건]",
       ...(news.length > 0 ? news.map((item, index) => `${index + 1}. ${item.title}`) : ["데이터 없음"]),

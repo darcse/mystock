@@ -36,6 +36,17 @@ function waitMinimumSpinnerTime() {
   });
 }
 
+function myAvgCostReturnPercent(
+  current: number | null | undefined,
+  avgPrice: number | null,
+): number | null {
+  if (current == null || avgPrice == null || avgPrice <= 0) {
+    return null;
+  }
+
+  return ((current - avgPrice) / avgPrice) * 100;
+}
+
 export function StocksManager({
   initialStocks,
   isAuthenticated,
@@ -775,6 +786,7 @@ export function StocksManager({
                 const changePercent = stock.quote?.marketChangePercent ?? null;
                 const isPositive = (changePercent ?? 0) > 0;
                 const isNegative = (changePercent ?? 0) < 0;
+                const myCardReturn = myAvgCostReturnPercent(stock.quote?.marketPrice, stock.memoAvgPrice);
                 const rawDisplayName = localizedNames[stock.ticker] ?? stock.name;
                 const displayName = rawDisplayName.replace(/\s*\(.*?\)\s*$/, "");
 
@@ -850,6 +862,17 @@ export function StocksManager({
                           </p>
                         </div>
                       </div>
+
+                      {myCardReturn !== null ? (
+                        <p
+                          className="text-[11px] font-medium tracking-[-0.01em]"
+                          style={{
+                            color: myCardReturn > 0 ? "#27a644" : myCardReturn < 0 ? "#e5484d" : "#8a8f98",
+                          }}
+                        >
+                          내 수익률 {formatChangePercent(myCardReturn)}
+                        </p>
+                      ) : null}
 
                       <div
                         className="mt-auto flex flex-wrap gap-2"

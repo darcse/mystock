@@ -125,6 +125,6 @@
       "데이터 로딩 중 스피너 또는 skeleton 표시 확인",
       "API 호출 실패 시 에러 상태 처리 확인"
     ],
-    "passes": false
+    "passes": true
   }
 ]

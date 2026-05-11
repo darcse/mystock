@@ -58,7 +58,7 @@ async function resolveDetail(stock: StockDashboardItem, userId: string): Promise
 
   const { data: memo } = await supabase
     .from("memos")
-    .select("content, buy_reason, stop_loss, target_price, created_at, updated_at")
+    .select("content, buy_reason, stop_loss, target_price, shares, avg_price, created_at, updated_at")
     .eq("stock_id", stock.id)
     .eq("user_id", userId)
     .maybeSingle();
@@ -79,6 +79,8 @@ async function resolveDetail(stock: StockDashboardItem, userId: string): Promise
           stopLoss: memo.stop_loss ?? "",
           targetPrice: memo.target_price ?? "",
           content: memo.content ?? "",
+          shares: memo.shares ?? null,
+          avgPrice: memo.avg_price ?? null,
           createdAt: memo.created_at,
           updatedAt: memo.updated_at,
         }
@@ -139,15 +141,35 @@ export default async function StocksPage({ searchParams }: StocksPageProps) {
       }
     }
 
+    const memoByStockId = new Map<string, { shares: number | null; avg_price: number | null }>();
+
+    if (stockIds.length > 0) {
+      const { data: memoRows } = await supabase
+        .from("memos")
+        .select("stock_id, shares, avg_price")
+        .in("stock_id", stockIds)
+        .eq("user_id", user.id);
+
+      for (const row of memoRows ?? []) {
+        memoByStockId.set(row.stock_id, {
+          shares: row.shares ?? null,
+          avg_price: row.avg_price ?? null,
+        });
+      }
+    }
+
     stocks = await Promise.all(
       stockItems.map(async (stock) => {
         const { quote, quoteError } = await getStockDashboardQuote(stock.ticker);
+        const memoRow = memoByStockId.get(stock.id);
 
         return {
           ...stock,
           latestAnalysisSummary: latestSummaryByStockId.get(stock.id) ?? null,
           quote,
           quoteError,
+          memoAvgPrice: memoRow?.avg_price ?? null,
+          memoShares: memoRow?.shares ?? null,
         };
       }),
     );

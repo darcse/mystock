@@ -27,6 +27,10 @@ export type StockDashboardItem = StockItem & {
   latestAnalysisSummary: string | null;
   quote: StockQuote | null;
   quoteError: string | null;
+  /** memos.avg_price — 수익률 표시용, 없으면 null */
+  memoAvgPrice: number | null;
+  /** memos.shares — 표시/분석용, 없으면 null */
+  memoShares: number | null;
 };
 
 export type StockQuote = {
@@ -82,6 +86,8 @@ export type StockMemo = {
   stopLoss: string;
   targetPrice: string;
   content: string;
+  shares: number | null;
+  avgPrice: number | null;
   createdAt: string;
   updatedAt: string;
 };

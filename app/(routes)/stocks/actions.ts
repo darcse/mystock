@@ -221,12 +221,30 @@ function normalizeOptionalText(value: FormDataEntryValue | null): string | null 
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function parseOptionalPositiveInt(value: FormDataEntryValue | null): number | null {
+  const raw = String(value ?? "")
+    .replace(/,/g, "")
+    .trim();
+  if (!raw) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return parsed;
+}
+
 export async function saveMemoAction(formData: FormData): Promise<MutationResult> {
   const stockId = String(formData.get("stockId") ?? "");
   const buyReason = normalizeOptionalText(formData.get("buyReason"));
   const stopLoss = normalizeOptionalText(formData.get("stopLoss"));
   const targetPrice = normalizeOptionalText(formData.get("targetPrice"));
   const content = normalizeOptionalText(formData.get("content"));
+  const shares = parseOptionalPositiveInt(formData.get("shares"));
+  const avgPrice = parseOptionalPositiveInt(formData.get("avgPrice"));
 
   if (!stockId) {
     return {
@@ -268,6 +286,8 @@ export async function saveMemoAction(formData: FormData): Promise<MutationResult
         buy_reason: buyReason,
         stop_loss: stopLoss,
         target_price: targetPrice,
+        shares,
+        avg_price: avgPrice,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "stock_id" },

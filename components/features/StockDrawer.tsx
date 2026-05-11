@@ -45,6 +45,33 @@ function formatSignedPercent(value: number | null) {
   return `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
 
+function parsePositiveIntInput(value: string): number | null {
+  const raw = value.replace(/,/g, "").trim();
+
+  if (!raw) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function myAvgCostReturnPercent(
+  current: number | null | undefined,
+  avgPrice: number | null,
+): number | null {
+  if (current == null || avgPrice == null || avgPrice <= 0) {
+    return null;
+  }
+
+  return ((current - avgPrice) / avgPrice) * 100;
+}
+
 function formatDateLabel(value: string) {
   const date = new Date(value);
 
@@ -280,6 +307,12 @@ export function StockDrawer({
   const [stopLoss, setStopLoss] = useState(detail?.memo?.stopLoss ?? "");
   const [targetPrice, setTargetPrice] = useState(() => String(detail?.memo?.targetPrice ?? ""));
   const [content, setContent] = useState(detail?.memo?.content ?? "");
+  const [sharesInput, setSharesInput] = useState(() =>
+    detail?.memo?.shares != null && detail.memo.shares > 0 ? String(detail.memo.shares) : "",
+  );
+  const [avgPriceInput, setAvgPriceInput] = useState(() =>
+    detail?.memo?.avgPrice != null && detail.memo.avgPrice > 0 ? String(detail.memo.avgPrice) : "",
+  );
 
   const [isMemoPending, startMemoTransition] = useTransition();
   const [memoMessage, setMemoMessage] = useState<string | null>(null);
@@ -298,6 +331,16 @@ export function StockDrawer({
     setStopLoss(renderedDetail?.memo?.stopLoss ?? "");
     setTargetPrice(String(renderedDetail?.memo?.targetPrice ?? ""));
     setContent(renderedDetail?.memo?.content ?? "");
+    setSharesInput(
+      renderedDetail?.memo?.shares != null && renderedDetail.memo.shares > 0
+        ? String(renderedDetail.memo.shares)
+        : "",
+    );
+    setAvgPriceInput(
+      renderedDetail?.memo?.avgPrice != null && renderedDetail.memo.avgPrice > 0
+        ? String(renderedDetail.memo.avgPrice)
+        : "",
+    );
     setMemoMessage(null);
     setMemoError(null);
     setIsDisclosuresOpen(false);
@@ -332,6 +375,8 @@ export function StockDrawer({
   const changePercent = quote?.marketChangePercent ?? null;
   const isPositive = (changePercent ?? 0) > 0;
   const isNegative = (changePercent ?? 0) < 0;
+  const parsedAvgForReturn = parsePositiveIntInput(avgPriceInput) ?? memo?.avgPrice ?? null;
+  const myReturnPercent = myAvgCostReturnPercent(quote?.marketPrice, parsedAvgForReturn);
 
   async function handleAnalyze() {
     if (!renderedDetail) {
@@ -387,6 +432,8 @@ export function StockDrawer({
         formData.set("stopLoss", stopLoss);
         formData.set("targetPrice", String(targetPrice));
         formData.set("content", content);
+        formData.set("shares", sharesInput);
+        formData.set("avgPrice", avgPriceInput);
 
         const result = await saveMemoAction(formData);
 
@@ -396,11 +443,15 @@ export function StockDrawer({
         }
 
         const nowIso = new Date().toISOString();
+        const savedShares = parsePositiveIntInput(sharesInput);
+        const savedAvgPrice = parsePositiveIntInput(avgPriceInput);
         setMemo((prev) => ({
           buyReason: normalizedBuyReason,
           stopLoss: normalizedStopLoss,
           targetPrice: normalizedTargetPrice,
           content: normalizedContent,
+          shares: savedShares,
+          avgPrice: savedAvgPrice,
           createdAt: prev?.createdAt ?? nowIso,
           updatedAt: nowIso,
         }));
@@ -498,7 +549,11 @@ export function StockDrawer({
         </div>
 
         <div className="mt-6 rounded-[16px] border border-[#23252a] bg-[#0f1011] p-5">
-          <div className="grid gap-4 md:grid-cols-4 md:gap-x-8">
+          <div
+            className={`grid gap-4 md:gap-x-8 ${
+              myReturnPercent !== null ? "md:grid-cols-5" : "md:grid-cols-4"
+            }`}
+          >
             <div className="flex flex-col">
               <div className="flex items-center gap-2">
                 <p className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">현재가</p>
@@ -524,6 +579,20 @@ export function StockDrawer({
                 {formatSignedPercent(changePercent)}
               </p>
             </div>
+            {myReturnPercent !== null ? (
+              <div className="flex flex-col">
+                <p className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">내 수익률</p>
+                <p
+                  className="mt-2 flex min-h-[44px] items-end text-[22px] font-medium leading-none tracking-[-0.03em]"
+                  style={{
+                    color:
+                      myReturnPercent > 0 ? "#27a644" : myReturnPercent < 0 ? "#e5484d" : "#f7f8f8",
+                  }}
+                >
+                  {formatSignedPercent(myReturnPercent)}
+                </p>
+              </div>
+            ) : null}
             <div className="flex flex-col">
               <p className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">52주 고가</p>
               <p className="mt-2 flex min-h-[44px] items-end text-[22px] font-medium leading-none tracking-[-0.03em]">
@@ -735,7 +804,7 @@ export function StockDrawer({
           <div className="mb-4">
             <h3 className="text-[20px] font-medium tracking-[-0.03em]">투자 메모</h3>
             <p className="mt-1 text-[13px] text-[#8a8f98]">
-              매수 이유, 손절 기준, 목표가, 자유 메모를 기록합니다.
+              보유 수량·평균 단가, 매수 이유, 손절 기준, 목표가, 자유 메모를 기록합니다.
             </p>
           </div>
           <div className="rounded-[16px] border border-[#23252a] bg-[#0f1011] p-5">
@@ -750,6 +819,26 @@ export function StockDrawer({
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
+              <label className="flex flex-col gap-2">
+                <span className="text-[13px] text-[#d0d6e0]">보유 주식 수</span>
+                <input
+                  inputMode="numeric"
+                  value={sharesInput}
+                  onChange={(event) => setSharesInput(event.target.value.replace(/\D/g, ""))}
+                  placeholder="예: 100"
+                  className="rounded-[8px] border border-[#23252a] bg-[#141516] px-3 py-2.5 text-[14px] text-[#f7f8f8] outline-none transition focus:border-[#5e6ad2] focus:ring-1 focus:ring-[#5e6ad2]"
+                />
+              </label>
+              <label className="flex flex-col gap-2">
+                <span className="text-[13px] text-[#d0d6e0]">평균 매입 단가 (원)</span>
+                <input
+                  inputMode="decimal"
+                  value={avgPriceInput}
+                  onChange={(event) => setAvgPriceInput(event.target.value.replace(/[^\d,]/g, ""))}
+                  placeholder="예: 70000"
+                  className="rounded-[8px] border border-[#23252a] bg-[#141516] px-3 py-2.5 text-[14px] text-[#f7f8f8] outline-none transition focus:border-[#5e6ad2] focus:ring-1 focus:ring-[#5e6ad2]"
+                />
+              </label>
               <label className="flex flex-col gap-2 md:col-span-2">
                 <span className="text-[13px] text-[#d0d6e0]">매수 이유</span>
                 <textarea

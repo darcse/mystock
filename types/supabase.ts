@@ -54,6 +54,8 @@ export type Database = {
           buy_reason: string | null;
           stop_loss: string | null;
           target_price: string | null;
+          shares: number | null;
+          avg_price: number | null;
           created_at: string;
           updated_at: string;
         };
@@ -65,6 +67,8 @@ export type Database = {
           buy_reason?: string | null;
           stop_loss?: string | null;
           target_price?: string | null;
+          shares?: number | null;
+          avg_price?: number | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -76,6 +80,8 @@ export type Database = {
           buy_reason?: string | null;
           stop_loss?: string | null;
           target_price?: string | null;
+          shares?: number | null;
+          avg_price?: number | null;
           created_at?: string;
           updated_at?: string;
         };
