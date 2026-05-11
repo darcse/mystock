@@ -1,5 +1,5 @@
 import YahooFinance from "yahoo-finance2";
-import type { StockChartPoint, StockQuote } from "@/types/stock";
+import type { MarketIndexItem, StockChartPoint, StockQuote } from "@/types/stock";
 
 const yahooFinance = new YahooFinance({
   suppressNotices: ["ripHistorical"],
@@ -31,6 +31,14 @@ type YahooQuoteResult = {
   shortName?: string;
   symbol?: string;
 };
+
+const MARKET_INDEX_DEFINITIONS = [
+  { symbol: "^KS11", label: "KOSPI" },
+  { symbol: "^KQ11", label: "KOSDAQ" },
+  { symbol: "^GSPC", label: "S&P500" },
+  { symbol: "^IXIC", label: "NASDAQ" },
+  { symbol: "KRW=X", label: "USD/KRW" },
+] as const;
 
 type YahooHistoricalResult = Array<{
   close?: number | null;
@@ -201,4 +209,28 @@ export async function getStockChart(ticker: string): Promise<StockChartPoint[]> 
     ma60: getMovingAverage(closes, 60, index),
     ma120: getMovingAverage(closes, 120, index),
   }));
+}
+
+export async function getMarketIndices(): Promise<MarketIndexItem[]> {
+  return Promise.all(
+    MARKET_INDEX_DEFINITIONS.map(async ({ symbol, label }) => {
+      try {
+        const quote = (await yahooFinance.quote(symbol)) as YahooQuoteResult;
+
+        return {
+          symbol,
+          label,
+          value: quote.regularMarketPrice ?? null,
+          changePercent: quote.regularMarketChangePercent ?? null,
+        };
+      } catch {
+        return {
+          symbol,
+          label,
+          value: null,
+          changePercent: null,
+        };
+      }
+    }),
+  );
 }

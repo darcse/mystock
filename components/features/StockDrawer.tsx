@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronUp, Loader2, RefreshCw, Trash2 } from "lucide-react";
 import type { AnalysisReport, StockChartPoint, StockDrawerDetail, StockMemo } from "@/types/stock";
@@ -18,6 +18,13 @@ type StockDrawerProps = {
 };
 
 const chartRanges: ChartRange[] = ["1M", "3M", "6M"];
+
+function waitMinimumSpinnerTime() {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, 300);
+  });
+}
+
 function formatPrice(value: number | null, currency: string | undefined) {
   if (value === null) {
     return "--";
@@ -40,7 +47,16 @@ function formatSignedPercent(value: number | null) {
 
 function formatDateLabel(value: string) {
   const date = new Date(value);
-  return `${date.getMonth() + 1}.${date.getDate()}`;
+
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "numeric",
+    day: "numeric",
+    timeZone: "Asia/Seoul",
+  })
+    .format(date)
+    .replace(/\s/g, "")
+    .replace("월", ".")
+    .replace("일", "");
 }
 
 function formatPublishedAt(value: string) {
@@ -52,6 +68,7 @@ function formatPublishedAt(value: string) {
 
   return new Intl.DateTimeFormat("ko-KR", {
     dateStyle: "medium",
+    timeZone: "Asia/Seoul",
   }).format(date);
 }
 
@@ -73,18 +90,19 @@ function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("ko-KR", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: "Asia/Seoul",
   }).format(date);
 }
 
-function getRangeStartDate(range: ChartRange) {
-  const date = new Date();
+function getRangeStartDate(range: ChartRange, latestPointDate: string | undefined) {
+  const date = latestPointDate ? new Date(latestPointDate) : new Date();
   const months = range === "1M" ? 1 : range === "3M" ? 3 : 6;
   date.setMonth(date.getMonth() - months);
   return date;
 }
 
 function filterChartPoints(points: StockChartPoint[], range: ChartRange) {
-  const startDate = getRangeStartDate(range);
+  const startDate = getRangeStartDate(range, points.at(-1)?.date);
   return points.filter((point) => new Date(point.date) >= startDate);
 }
 
@@ -250,8 +268,7 @@ export function StockDrawer({
   onRefresh,
 }: StockDrawerProps) {
   const router = useRouter();
-  const [renderedDetail, setRenderedDetail] = useState<StockDrawerDetail | null>(detail);
-  const [isVisible, setIsVisible] = useState(Boolean(detail));
+  const renderedDetail = detail;
   const [range, setRange] = useState<ChartRange>("3M");
   const [isChartPending, startTransition] = useTransition();
   const [analysis, setAnalysis] = useState<AnalysisReport | null>(detail?.analysis ?? null);
@@ -269,66 +286,7 @@ export function StockDrawer({
   const [memoError, setMemoError] = useState<string | null>(null);
   const [isDisclosuresOpen, setIsDisclosuresOpen] = useState(false);
   const [isQuoteRefreshing, setIsQuoteRefreshing] = useState(false);
-  const [isClosing, setIsClosing] = useState(false);
-  const closeFallbackTimerRef = useRef<number | null>(null);
-  const closeHandledRef = useRef(false);
-  const finalizeClose = useCallback(() => {
-    if (closeHandledRef.current) {
-      return;
-    }
-
-    closeHandledRef.current = true;
-    if (closeFallbackTimerRef.current) {
-      window.clearTimeout(closeFallbackTimerRef.current);
-      closeFallbackTimerRef.current = null;
-    }
-
-    setIsClosing(false);
-    setIsVisible(false);
-    onClose();
-  }, [onClose]);
-
-  const handleClose = useCallback(() => {
-    if (isClosing || !isVisible) {
-      return;
-    }
-    closeHandledRef.current = false;
-    if (closeFallbackTimerRef.current) {
-      window.clearTimeout(closeFallbackTimerRef.current);
-      closeFallbackTimerRef.current = null;
-    }
-    setIsClosing(true);
-    closeFallbackTimerRef.current = window.setTimeout(() => {
-      finalizeClose();
-    }, 200);
-  }, [finalizeClose, isClosing, isVisible]);
-
-  useEffect(() => {
-    if (detail) {
-      setRenderedDetail(detail);
-    }
-  }, [detail]);
-
-  useEffect(() => {
-    if (isOpen) {
-      if (closeFallbackTimerRef.current) {
-        window.clearTimeout(closeFallbackTimerRef.current);
-        closeFallbackTimerRef.current = null;
-      }
-      closeHandledRef.current = false;
-      setIsVisible(true);
-      setIsClosing(false);
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
-    return () => {
-      if (closeFallbackTimerRef.current) {
-        window.clearTimeout(closeFallbackTimerRef.current);
-        closeFallbackTimerRef.current = null;
-      }
-    };
-  }, []);
+  const [isNewsRefreshing, setIsNewsRefreshing] = useState(false);
 
   useEffect(() => {
     setRange("3M");
@@ -357,15 +315,15 @@ export function StockDrawer({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        handleClose();
+        onClose();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, handleClose]);
+  }, [isOpen, onClose]);
 
-  if (!isVisible || !renderedDetail) {
+  if (!renderedDetail) {
     return null;
   }
 
@@ -458,7 +416,10 @@ export function StockDrawer({
   const handleRefresh = async () => {
     setIsQuoteRefreshing(true);
     try {
-      await Promise.resolve(onRefresh());
+      await Promise.all([
+        Promise.resolve(onRefresh()),
+        waitMinimumSpinnerTime(),
+      ]);
     } catch {
       // 새로고침 실패 시에도 스피너는 반드시 종료한다.
     } finally {
@@ -466,33 +427,30 @@ export function StockDrawer({
     }
   };
 
+  const handleNewsRefresh = async () => {
+    setIsNewsRefreshing(true);
+    try {
+      await Promise.all([
+        Promise.resolve(router.refresh()),
+        waitMinimumSpinnerTime(),
+      ]);
+    } finally {
+      setIsNewsRefreshing(false);
+    }
+  };
+
   return (
     <div
-      className={`fixed inset-0 z-50 transition ${isVisible ? "pointer-events-auto" : "pointer-events-none"}`}
-      aria-hidden={!isVisible}
+      className={`fixed inset-0 z-50 ${isOpen ? "pointer-events-auto" : "pointer-events-none"}`}
     >
       <button
         type="button"
         aria-label="드로어 닫기"
-        onClick={handleClose}
-        className={`absolute inset-0 bg-black/55 transition-opacity duration-[180ms] ease-out ${isOpen && !isClosing ? "opacity-100" : "opacity-0"}`}
+        onClick={onClose}
+        className={`absolute inset-0 bg-black/55 transition-opacity duration-[180ms] ease-out ${isOpen ? "opacity-100" : "opacity-0"}`}
       />
       <aside
-        onTransitionEnd={(event) => {
-          if (event.target !== event.currentTarget || event.propertyName !== "transform") {
-            return;
-          }
-
-          if (isClosing) {
-            finalizeClose();
-            return;
-          }
-
-          if (!isOpen) {
-            setIsVisible(false);
-          }
-        }}
-        className={`absolute right-0 top-0 h-full w-full max-w-[760px] overflow-y-auto border-l border-[#23252a] bg-[#010102] p-6 text-[#f7f8f8] shadow-[-24px_0_80px_rgba(0,0,0,0.45)] transition-transform duration-[180ms] ease-out ${isOpen && !isClosing ? "translate-x-0" : "translate-x-full"}`}
+        className={`absolute right-0 top-0 h-full w-full max-w-[760px] overflow-y-auto border-l border-[#23252a] bg-[#010102] p-6 text-[#f7f8f8] shadow-[-24px_0_80px_rgba(0,0,0,0.45)] transition-transform duration-[180ms] ease-out ${isOpen ? "translate-x-0" : "translate-x-full"}`}
       >
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1 flex-col gap-2">
@@ -531,7 +489,7 @@ export function StockDrawer({
             </button>
             <button
               type="button"
-              onClick={handleClose}
+              onClick={onClose}
               className="rounded-[8px] border border-[#23252a] bg-[#141516] px-3 py-2 text-[14px] text-[#f7f8f8] transition hover:border-[#5e6ad2]"
             >
               닫기
@@ -694,10 +652,16 @@ export function StockDrawer({
             <button
               type="button"
               aria-label="뉴스 새로고침"
-              onClick={() => router.refresh()}
+              onClick={() => {
+                void handleNewsRefresh();
+              }}
               className="inline-flex h-10 w-10 items-center justify-center rounded-[8px] border border-[#23252a] bg-[#141516] text-[#f7f8f8] transition hover:border-[#5e6ad2]"
             >
-              <RefreshCw size={18} />
+              {isNewsRefreshing ? (
+                <Loader2 size={18} className="animate-spin text-[#5e6ad2]" />
+              ) : (
+                <RefreshCw size={18} />
+              )}
             </button>
           </div>
           <div className="rounded-[16px] border border-[#23252a] bg-[#0f1011]">

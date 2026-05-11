@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Loader2, LogOut, RefreshCw, X } from "lucide-react";
 import type { LookupState } from "@/app/(routes)/stocks/action-types";
@@ -18,6 +18,7 @@ import type { StockDashboardItem, StockDrawerDetail, StockLookup, StockStatus } 
 type StocksManagerProps = {
   initialStocks: StockDashboardItem[];
   isAuthenticated: boolean;
+  marketIndicesBar?: ReactNode;
   selectedDetail: StockDrawerDetail | null;
 };
 
@@ -29,9 +30,16 @@ const initialLookupState: LookupState = {
   message: null,
 };
 
+function waitMinimumSpinnerTime() {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, 300);
+  });
+}
+
 export function StocksManager({
   initialStocks,
   isAuthenticated,
+  marketIndicesBar,
   selectedDetail,
 }: StocksManagerProps) {
   const pathname = usePathname();
@@ -60,12 +68,17 @@ export function StocksManager({
   const [isDashboardRefreshing, setIsDashboardRefreshing] = useState(false);
   const [isDrawerLoading, setIsDrawerLoading] = useState(false);
   const [isDrawerRefreshing, setIsDrawerRefreshing] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
   const [lookupState, lookupAction, isLookupPending] = useActionState(
     lookupStockAction,
     initialLookupState,
   );
   const [isPending, startTransition] = useTransition();
   const debounceTimerRef = useRef<number | null>(null);
+  const pageContainerRef = useRef<HTMLElement | null>(null);
+  const tickerInputRef = useRef<HTMLInputElement | null>(null);
+  const hasBlockedInitialTickerFocusRef = useRef(false);
   const normalizedTicker = ticker.trim().toUpperCase();
   const selectedTickerInQuery = searchParams.get("ticker")?.trim().toUpperCase() ?? null;
   const activeLookup =
@@ -225,24 +238,22 @@ export function StocksManager({
   }, [debouncedSearchInput, krxStocks]);
 
   useEffect(() => {
-    if (!isDashboardRefreshing) {
-      return;
-    }
-    setIsDashboardRefreshing(false);
-  }, [initialStocks, isDashboardRefreshing]);
-
-  useEffect(() => {
     if (!selectedTickerInQuery) {
       setIsDrawerLoading(false);
-      setIsDrawerRefreshing(false);
       return;
     }
 
     if (selectedDetail?.stock.ticker === selectedTickerInQuery) {
       setIsDrawerLoading(false);
-      setIsDrawerRefreshing(false);
     }
   }, [selectedDetail?.stock.ticker, selectedTickerInQuery]);
+
+  // selectedDetail이 서버에서 null로 확정되면 isDrawerOpen도 닫힘으로 동기화
+  useEffect(() => {
+    if (!selectedDetail) {
+      setIsDrawerOpen(false);
+    }
+  }, [selectedDetail]);
 
   async function handleSave(status: StockStatus) {
     const formData = new FormData();
@@ -447,9 +458,12 @@ export function StocksManager({
   }
 
   function updateDrawerTicker(nextTicker: string | null) {
+    setSelectedTicker(nextTicker);
     if (nextTicker) {
+      setIsDrawerOpen(true);
       setIsDrawerLoading(true);
     } else {
+      setIsDrawerOpen(false);
       setIsDrawerLoading(false);
       setIsDrawerRefreshing(false);
     }
@@ -471,19 +485,33 @@ export function StocksManager({
   function handleDashboardRefresh() {
     setIsDashboardRefreshing(true);
     startTransition(() => {
-      router.refresh();
+      void Promise.all([
+        Promise.resolve(router.refresh()),
+        waitMinimumSpinnerTime(),
+      ]).finally(() => {
+        setIsDashboardRefreshing(false);
+      });
     });
   }
 
   function handleDrawerRefresh() {
     setIsDrawerRefreshing(true);
     startTransition(() => {
-      router.refresh();
+      void Promise.all([
+        Promise.resolve(router.refresh()),
+        waitMinimumSpinnerTime(),
+      ]).finally(() => {
+        setIsDrawerRefreshing(false);
+      });
     });
   }
 
   return (
-    <section className="mx-auto flex w-full max-w-7xl flex-col gap-6">
+    <section
+      ref={pageContainerRef}
+      tabIndex={-1}
+      className="mx-auto flex w-full max-w-7xl flex-col gap-6 focus:outline-none"
+    >
       <header className="flex flex-col gap-3 rounded-[24px] border border-[#23252a] bg-[#0f1011] p-6 text-[#f7f8f8] shadow-[0_0_0_1px_rgba(255,255,255,0.01)]">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="flex flex-col gap-2">
@@ -530,6 +558,8 @@ export function StocksManager({
         ) : null}
       </header>
 
+      {marketIndicesBar}
+
       <div className="rounded-[16px] border border-[#23252a] bg-[#0f1011] p-5 text-[#f7f8f8]">
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-end gap-3">
@@ -546,6 +576,7 @@ export function StocksManager({
                 </a>
               </div>
               <input
+                ref={tickerInputRef}
                 name="ticker"
                 value={ticker}
                 onChange={(event) => setTicker(event.target.value.toUpperCase())}
@@ -555,7 +586,16 @@ export function StocksManager({
                     runLookup(ticker);
                   }
                 }}
-                onFocus={() => setIsSearchOpen(true)}
+                onFocus={(event) => {
+                  if (!hasBlockedInitialTickerFocusRef.current) {
+                    hasBlockedInitialTickerFocusRef.current = true;
+                    event.currentTarget.blur();
+                    pageContainerRef.current?.focus({ preventScroll: true });
+                    return;
+                  }
+
+                  setIsSearchOpen(true);
+                }}
                 onBlur={() => window.setTimeout(() => setIsSearchOpen(false), 120)}
                 placeholder="티커 입력 (예: 005930.KS, AAPL)"
                 className="h-11 rounded-[10px] border border-[#23252a] bg-[#141516] px-3 pr-10 text-[14px] text-[#f7f8f8] outline-none transition focus:border-[#5e6ad2] focus:ring-1 focus:ring-[#5e6ad2]"
@@ -846,14 +886,14 @@ export function StocksManager({
         </div>
 
       <StockDrawer
-        detail={selectedDetail}
-        isOpen={Boolean(selectedDetail)}
+        detail={selectedDetail?.stock.ticker === selectedTicker ? selectedDetail : null}
+        isOpen={isDrawerOpen}
         onClose={() => updateDrawerTicker(null)}
         onDelete={handleDelete}
         onRefresh={handleDrawerRefresh}
         isQuoteRefreshing={isDrawerRefreshing}
       />
-      {isDrawerLoading && !selectedDetail ? (
+      {isDrawerLoading && selectedDetail?.stock.ticker !== selectedTicker ? (
         <div className="pointer-events-none fixed inset-0 z-[55] flex justify-end">
           <div className="h-full w-full max-w-[760px] border-l border-[#23252a] bg-[#010102]/96 p-6">
             <div className="flex h-full items-center justify-center">
