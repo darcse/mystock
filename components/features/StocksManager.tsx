@@ -758,7 +758,7 @@ export function StocksManager({
                         : "0 0 0 1px rgba(255,255,255,0.01)",
                     }}
                   >
-                    <div className="flex h-full min-h-[360px] flex-col gap-3">
+                    <div className="flex h-full min-h-[248px] flex-col gap-3">
                       <div className="flex min-h-[72px] items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
                           <div className="flex min-h-[30px] items-center gap-2">
@@ -811,24 +811,8 @@ export function StocksManager({
                         </div>
                       </div>
 
-                      <div className="rounded-[16px] border border-[#23252a] bg-[#0f1011] p-3.5">
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">
-                            AI 한줄 요약
-                          </p>
-                          {stock.quoteError ? (
-                            <span className="text-[12px] text-[#e5484d]">
-                              {stock.quoteError}
-                            </span>
-                          ) : null}
-                        </div>
-                        <p className="mt-2 min-h-[52px] line-clamp-2 text-[13px] leading-6 text-[#d0d6e0]">
-                          {stock.latestAnalysisSummary ?? "분석 없음"}
-                        </p>
-                      </div>
-
                       <div
-                        className="mt-0.5 flex flex-wrap gap-2"
+                        className="mt-auto flex flex-wrap gap-2"
                         onClick={(event) => event.stopPropagation()}
                         onKeyDown={(event) => event.stopPropagation()}
                       >
