@@ -5,6 +5,7 @@
 [2026-05-08] [Codex] DETAIL 차트/뉴스 수정 완료: Yahoo chart() 전환 및 한국 종목 뉴스 검색 재시도 추가 | passes: 변경 없음
 [2026-05-11] [Codex] UI-010 구현 완료: 주요 지수 5개 표시 바 및 서버 조회 연동 추가 | passes: 변경 없음
 [2026-05-11] [Codex] STOCK-004~006 구현 완료: 메모 shares/avg_price 저장·내 수익률(드로어/카드)·AI 분석 프롬프트 보유 맥락 반영 | passes: feature_list/STOCK.json STOCK-004~006 true
+[2026-05-11] [Codex] UI-011 구현 완료: 드로어 max-w 960px·헤더 풀폭·좌 70%(시세·차트·뉴스·공시)/우 30%(메모·AI, 독립 스크롤) 2단 레이아웃 | passes: feature_list/UI.json UI-011 true
 [2026-05-08] [Codex] AI-001, AI-002 구현 완료: /api/analyze Gemini 분석·analyses upsert 및 StockDrawer 분석 UI/재분석/생성시각 표시 추가 | passes: 변경 없음
 [2026-05-08] [Codex] MEMO-001, MEMO-002 구현 완료: StockDrawer 투자 메모 섹션 추가 및 saveMemoAction/upsert·조회 연동 | passes: 변경 없음
 [2026-05-08] [Codex] UI-001~UI-006 구현 완료: /→/stocks 리다이렉트, 헤더 아이콘(새로고침/로그아웃), 종목 추가 인라인+상태 토글+자동완성, 대시보드 전폭+한글명 매핑, 드로어 리프레시/시세 한줄/차트 상단, 공시 접기·뉴스 새로고침 | passes: 변경 없음

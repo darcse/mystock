@@ -918,7 +918,7 @@ export function StocksManager({
       />
       {isDrawerLoading && selectedDetail?.stock.ticker !== selectedTicker ? (
         <div className="pointer-events-none fixed inset-0 z-[55] flex justify-end">
-          <div className="h-full w-full max-w-[760px] border-l border-[#23252a] bg-[#010102]/96 p-6">
+          <div className="h-full w-full max-w-[960px] border-l border-[#23252a] bg-[#010102]/96 p-6">
             <div className="flex h-full items-center justify-center">
               <Loader2 size={28} className="animate-spin text-[#5e6ad2]" />
             </div>

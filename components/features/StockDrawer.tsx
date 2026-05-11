@@ -501,9 +501,9 @@ export function StockDrawer({
         className={`absolute inset-0 bg-black/55 transition-opacity duration-[180ms] ease-out ${isOpen ? "opacity-100" : "opacity-0"}`}
       />
       <aside
-        className={`absolute right-0 top-0 h-full w-full max-w-[760px] overflow-y-auto border-l border-[#23252a] bg-[#010102] p-6 text-[#f7f8f8] shadow-[-24px_0_80px_rgba(0,0,0,0.45)] transition-transform duration-[180ms] ease-out ${isOpen ? "translate-x-0" : "translate-x-full"}`}
+        className={`absolute right-0 top-0 flex h-full w-full max-w-[960px] flex-col overflow-hidden border-l border-[#23252a] bg-[#010102] p-6 text-[#f7f8f8] shadow-[-24px_0_80px_rgba(0,0,0,0.45)] transition-transform duration-[180ms] ease-out ${isOpen ? "translate-x-0" : "translate-x-full"}`}
       >
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex shrink-0 items-start justify-between gap-4">
           <div className="min-w-0 flex-1 flex-col gap-2">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="min-w-0 break-words text-[28px] font-semibold tracking-[-0.03em]">
@@ -517,7 +517,7 @@ export function StockDrawer({
               {renderedDetail.stock.status === "holding" ? "보유 종목" : "관심 종목"}
             </p>
           </div>
-          <div className="shrink-0 flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
               aria-label="종목 삭제"
@@ -548,30 +548,34 @@ export function StockDrawer({
           </div>
         </div>
 
-        <div className="mt-6 rounded-[16px] border border-[#23252a] bg-[#0f1011] p-5">
+        <div className="mt-6 flex min-h-0 flex-1 gap-6">
+          <div className="min-h-0 min-w-0 flex-[7] overflow-y-auto pr-1">
+        <div className="rounded-[16px] border border-[#23252a] bg-[#0f1011] p-5">
           <div
-            className={`grid gap-4 md:gap-x-8 ${
-              myReturnPercent !== null ? "md:grid-cols-5" : "md:grid-cols-4"
+            className={`grid grid-cols-1 gap-x-3 gap-y-4 md:gap-x-4 ${
+              myReturnPercent !== null
+                ? "md:grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]"
+                : "md:grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]"
             }`}
           >
-            <div className="flex flex-col">
+            <div className="flex w-max max-w-full flex-col pr-1">
               <div className="flex items-center gap-2">
                 <p className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">현재가</p>
                 {isQuoteRefreshing ? (
                   <Loader2 size={14} className="animate-spin text-[#5e6ad2]" />
                 ) : null}
               </div>
-              <p className="mt-2 flex min-h-[44px] items-end text-[30px] font-semibold leading-none tracking-[-0.04em]">
+              <p className="mt-2 flex min-h-[44px] items-end whitespace-nowrap text-[30px] font-semibold leading-none tracking-[-0.04em]">
                 {formatPrice(quote?.marketPrice ?? null, quote?.currency)}
               </p>
               {renderedDetail.stockQuoteError ? (
                 <p className="mt-2 text-[13px] text-[#e5484d]">{renderedDetail.stockQuoteError}</p>
               ) : null}
             </div>
-            <div className="flex flex-col">
+            <div className="flex min-w-0 flex-col">
               <p className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">등락률</p>
               <p
-                className="mt-2 flex min-h-[44px] items-end text-[22px] font-medium leading-none tracking-[-0.03em]"
+                className="mt-2 flex min-h-[44px] min-w-0 items-end text-[20px] font-medium leading-none tracking-[-0.03em] tabular-nums"
                 style={{
                   color: isPositive ? "#27a644" : isNegative ? "#e5484d" : "#f7f8f8",
                 }}
@@ -580,10 +584,10 @@ export function StockDrawer({
               </p>
             </div>
             {myReturnPercent !== null ? (
-              <div className="flex flex-col">
+              <div className="flex min-w-0 flex-col">
                 <p className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">내 수익률</p>
                 <p
-                  className="mt-2 flex min-h-[44px] items-end text-[22px] font-medium leading-none tracking-[-0.03em]"
+                  className="mt-2 flex min-h-[44px] min-w-0 items-end text-[20px] font-medium leading-none tracking-[-0.03em] tabular-nums"
                   style={{
                     color:
                       myReturnPercent > 0 ? "#27a644" : myReturnPercent < 0 ? "#e5484d" : "#f7f8f8",
@@ -593,15 +597,15 @@ export function StockDrawer({
                 </p>
               </div>
             ) : null}
-            <div className="flex flex-col">
+            <div className="flex min-w-0 flex-col">
               <p className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">52주 고가</p>
-              <p className="mt-2 flex min-h-[44px] items-end text-[22px] font-medium leading-none tracking-[-0.03em]">
+              <p className="mt-2 flex min-h-[44px] min-w-0 items-end break-words text-[20px] font-medium leading-none tracking-[-0.03em] tabular-nums">
                 {formatPrice(quote?.fiftyTwoWeekHigh ?? null, quote?.currency)}
               </p>
             </div>
-            <div className="flex flex-col">
+            <div className="flex min-w-0 flex-col">
               <p className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">52주 저가</p>
-              <p className="mt-2 flex min-h-[44px] items-end text-[22px] font-medium leading-none tracking-[-0.03em]">
+              <p className="mt-2 flex min-h-[44px] min-w-0 items-end break-words text-[20px] font-medium leading-none tracking-[-0.03em] tabular-nums">
                 {formatPrice(quote?.fiftyTwoWeekLow ?? null, quote?.currency)}
               </p>
             </div>
@@ -638,76 +642,6 @@ export function StockDrawer({
           ) : (
             <StockChart isPending={isChartPending} points={filteredPoints} />
           )}
-        </section>
-
-        <section className="mt-8">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-[20px] font-medium tracking-[-0.03em]">AI 분석 리포트</h3>
-              <p className="mt-1 text-[13px] text-[#8a8f98]">
-                시세, 뉴스, 공시를 종합해 매수/매도/관망 의견을 제공합니다.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={handleAnalyze}
-              disabled={isAnalyzing}
-              className="rounded-[8px] bg-[#5e6ad2] px-3 py-2 text-[14px] font-medium text-white transition hover:bg-[#828fff] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isAnalyzing ? "분석 중..." : analysis ? "재분석" : "분석 시작"}
-            </button>
-          </div>
-          <div className="rounded-[16px] border border-[#23252a] bg-[#0f1011] p-5">
-            {analysisError ? <p className="text-[13px] text-[#e5484d]">{analysisError}</p> : null}
-            {!analysis && !analysisError ? <p className="text-[13px] text-[#8a8f98]">아직 분석 없음</p> : null}
-            {analysis ? (
-              <div className="flex flex-col gap-5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">의견</span>
-                  <span
-                    className="rounded-full px-2.5 py-1 text-[12px] font-medium"
-                    style={{
-                      backgroundColor:
-                        analysis.opinion === "매수"
-                          ? "rgba(39,166,68,0.12)"
-                          : analysis.opinion === "매도"
-                            ? "rgba(229,72,77,0.12)"
-                            : "rgba(138,143,152,0.2)",
-                      color:
-                        analysis.opinion === "매수"
-                          ? "#27a644"
-                          : analysis.opinion === "매도"
-                            ? "#e5484d"
-                            : "#d0d6e0",
-                    }}
-                  >
-                    {analysis.opinion}
-                  </span>
-                  <span className="text-[12px] text-[#8a8f98]">{formatDateTime(analysis.createdAt)}</span>
-                </div>
-                <div>
-                  <p className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">현재 상황 요약</p>
-                  <p className="mt-2 text-[14px] leading-6 text-[#f7f8f8]">{analysis.summary}</p>
-                </div>
-                <div>
-                  <p className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">긍정 요인</p>
-                  <ul className="mt-2 list-disc space-y-1 pl-5 text-[14px] leading-6 text-[#d0d6e0]">
-                    {(Array.isArray(analysis.positives) ? analysis.positives : []).map((item, index) => (
-                      <li key={`${item}-${index}`}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-                <div>
-                  <p className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">리스크 요인</p>
-                  <ul className="mt-2 list-disc space-y-1 pl-5 text-[14px] leading-6 text-[#d0d6e0]">
-                    {(Array.isArray(analysis.risks) ? analysis.risks : []).map((item, index) => (
-                      <li key={`${item}-${index}`}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            ) : null}
-          </div>
         </section>
 
         <section className="mt-8">
@@ -799,8 +733,11 @@ export function StockDrawer({
             </div>
           ) : null}
         </section>
+          </div>
 
-        <section className="mt-8">
+          <div className="flex min-h-0 min-w-0 flex-[3] flex-col border-l border-[#23252a] pl-6">
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <section className="mt-0">
           <div className="mb-4">
             <h3 className="text-[20px] font-medium tracking-[-0.03em]">투자 메모</h3>
             <p className="mt-1 text-[13px] text-[#8a8f98]">
@@ -818,7 +755,7 @@ export function StockDrawer({
               )}
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4">
               <label className="flex flex-col gap-2">
                 <span className="text-[13px] text-[#d0d6e0]">보유 주식 수</span>
                 <input
@@ -839,7 +776,7 @@ export function StockDrawer({
                   className="rounded-[8px] border border-[#23252a] bg-[#141516] px-3 py-2.5 text-[14px] text-[#f7f8f8] outline-none transition focus:border-[#5e6ad2] focus:ring-1 focus:ring-[#5e6ad2]"
                 />
               </label>
-              <label className="flex flex-col gap-2 md:col-span-2">
+              <label className="flex flex-col gap-2">
                 <span className="text-[13px] text-[#d0d6e0]">매수 이유</span>
                 <textarea
                   value={buyReason}
@@ -869,7 +806,7 @@ export function StockDrawer({
                 />
               </label>
 
-              <label className="flex flex-col gap-2 md:col-span-2">
+              <label className="flex flex-col gap-2">
                 <span className="text-[13px] text-[#d0d6e0]">자유 메모</span>
                 <textarea
                   value={content}
@@ -898,6 +835,79 @@ export function StockDrawer({
             </div>
           </div>
         </section>
+
+        <section className="mt-8">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-[20px] font-medium tracking-[-0.03em]">AI 분석 리포트</h3>
+              <p className="mt-1 text-[13px] text-[#8a8f98]">
+                시세, 뉴스, 공시를 종합해 매수/매도/관망 의견을 제공합니다.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleAnalyze}
+              disabled={isAnalyzing}
+              className="shrink-0 rounded-[8px] bg-[#5e6ad2] px-3 py-2 text-[14px] font-medium text-white transition hover:bg-[#828fff] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isAnalyzing ? "분석 중..." : analysis ? "재분석" : "분석 시작"}
+            </button>
+          </div>
+          <div className="rounded-[16px] border border-[#23252a] bg-[#0f1011] p-5">
+            {analysisError ? <p className="text-[13px] text-[#e5484d]">{analysisError}</p> : null}
+            {!analysis && !analysisError ? <p className="text-[13px] text-[#8a8f98]">아직 분석 없음</p> : null}
+            {analysis ? (
+              <div className="flex flex-col gap-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">의견</span>
+                  <span
+                    className="rounded-full px-2.5 py-1 text-[12px] font-medium"
+                    style={{
+                      backgroundColor:
+                        analysis.opinion === "매수"
+                          ? "rgba(39,166,68,0.12)"
+                          : analysis.opinion === "매도"
+                            ? "rgba(229,72,77,0.12)"
+                            : "rgba(138,143,152,0.2)",
+                      color:
+                        analysis.opinion === "매수"
+                          ? "#27a644"
+                          : analysis.opinion === "매도"
+                            ? "#e5484d"
+                            : "#d0d6e0",
+                    }}
+                  >
+                    {analysis.opinion}
+                  </span>
+                  <span className="text-[12px] text-[#8a8f98]">{formatDateTime(analysis.createdAt)}</span>
+                </div>
+                <div>
+                  <p className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">현재 상황 요약</p>
+                  <p className="mt-2 text-[14px] leading-6 text-[#f7f8f8]">{analysis.summary}</p>
+                </div>
+                <div>
+                  <p className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">긍정 요인</p>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-[14px] leading-6 text-[#d0d6e0]">
+                    {(Array.isArray(analysis.positives) ? analysis.positives : []).map((item, index) => (
+                      <li key={`${item}-${index}`}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-[12px] uppercase tracking-[0.16em] text-[#8a8f98]">리스크 요인</p>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-[14px] leading-6 text-[#d0d6e0]">
+                    {(Array.isArray(analysis.risks) ? analysis.risks : []).map((item, index) => (
+                      <li key={`${item}-${index}`}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </section>
+            </div>
+          </div>
+        </div>
       </aside>
     </div>
   );
