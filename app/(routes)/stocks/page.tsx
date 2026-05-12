@@ -7,10 +7,60 @@ import { createClient } from "@/lib/supabase/server";
 import type {
   AnalysisOpinion,
   MarketIndexItem,
+  PortfolioSummaryData,
   StockDashboardItem,
   StockDrawerDetail,
   StockItem,
 } from "@/types/stock";
+
+function buildPortfolioSummary(stocks: StockDashboardItem[]): PortfolioSummaryData | null {
+  let totalCostBasis = 0;
+  let totalMarketValue = 0;
+  let positionCount = 0;
+
+  for (const stock of stocks) {
+    if (stock.status !== "holding") {
+      continue;
+    }
+
+    const shares = stock.memoShares;
+    const avg = stock.memoAvgPrice;
+    const price = stock.quote?.marketPrice ?? null;
+
+    if (
+      shares == null ||
+      avg == null ||
+      price == null ||
+      !Number.isFinite(shares) ||
+      !Number.isFinite(avg) ||
+      !Number.isFinite(price) ||
+      shares <= 0 ||
+      avg <= 0 ||
+      price < 0
+    ) {
+      continue;
+    }
+
+    totalCostBasis += avg * shares;
+    totalMarketValue += price * shares;
+    positionCount += 1;
+  }
+
+  if (positionCount === 0 || totalCostBasis <= 0) {
+    return null;
+  }
+
+  const totalProfit = totalMarketValue - totalCostBasis;
+  const profitPercent = (totalProfit / totalCostBasis) * 100;
+
+  return {
+    totalCostBasis,
+    totalMarketValue,
+    totalProfit,
+    profitPercent,
+    positionCount,
+  };
+}
 
 function mapStockItem(stock: {
   created_at: string;
@@ -210,12 +260,15 @@ export default async function StocksPage({ searchParams }: StocksPageProps) {
     }
   }
 
+  const portfolioSummary = user ? buildPortfolioSummary(stocks) : null;
+
   return (
     <main className="min-h-screen bg-[#010102] px-4 py-10 md:px-8">
       <StocksManager
         initialStocks={stocks}
         isAuthenticated={Boolean(user)}
         marketIndicesBar={<MarketIndicesBar indices={marketIndices} />}
+        portfolioSummary={portfolioSummary}
         selectedDetail={selectedDetail}
       />
     </main>

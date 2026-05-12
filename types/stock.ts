@@ -37,6 +37,15 @@ export type StockDashboardItem = StockItem & {
   memoTargetPrice: number | null;
 };
 
+/** UI-013 포트폴리오 요약 (서버에서 집계해 전달) */
+export type PortfolioSummaryData = {
+  totalCostBasis: number;
+  totalMarketValue: number;
+  totalProfit: number;
+  profitPercent: number;
+  positionCount: number;
+};
+
 export type StockQuote = {
   symbol: string;
   shortName: string;

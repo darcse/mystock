@@ -12,13 +12,21 @@ import {
   toggleStockStatusAction,
 } from "@/app/(routes)/stocks/actions";
 import { StockDrawer } from "@/components/features/StockDrawer";
+import { PortfolioSummary } from "@/components/ui/PortfolioSummary";
 import { createClient } from "@/lib/supabase/client";
-import type { StockDashboardItem, StockDrawerDetail, StockLookup, StockStatus } from "@/types/stock";
+import type {
+  PortfolioSummaryData,
+  StockDashboardItem,
+  StockDrawerDetail,
+  StockLookup,
+  StockStatus,
+} from "@/types/stock";
 
 type StocksManagerProps = {
   initialStocks: StockDashboardItem[];
   isAuthenticated: boolean;
   marketIndicesBar?: ReactNode;
+  portfolioSummary: PortfolioSummaryData | null;
   selectedDetail: StockDrawerDetail | null;
 };
 
@@ -79,6 +87,7 @@ export function StocksManager({
   initialStocks,
   isAuthenticated,
   marketIndicesBar,
+  portfolioSummary,
   selectedDetail,
 }: StocksManagerProps) {
   const pathname = usePathname();
@@ -598,6 +607,8 @@ export function StocksManager({
       </header>
 
       {marketIndicesBar}
+
+      <PortfolioSummary data={portfolioSummary} />
 
       <div className="rounded-[16px] border border-[#23252a] bg-[#0f1011] p-5 text-[#f7f8f8]">
         <div className="flex flex-col gap-4">
