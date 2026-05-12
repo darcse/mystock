@@ -47,6 +47,34 @@ function myAvgCostReturnPercent(
   return ((current - avgPrice) / avgPrice) * 100;
 }
 
+/** 손절 문자열 → 현재가와 비교할 가격. %는 평균단가가 있을 때만 환산. */
+function parseStopLossPriceThreshold(stopLoss: string | null, avgPrice: number | null): number | null {
+  if (!stopLoss?.trim()) {
+    return null;
+  }
+
+  const trimmed = stopLoss.trim();
+
+  if (/%/.test(trimmed)) {
+    const match = trimmed.match(/(-?\d+(?:[.,]\d+)?)\s*%/);
+    if (!match) {
+      return null;
+    }
+    const pct = Number.parseFloat(match[1].replace(",", "."));
+    if (!Number.isFinite(pct) || avgPrice == null || avgPrice <= 0) {
+      return null;
+    }
+    return avgPrice * (1 + pct / 100);
+  }
+
+  const digits = trimmed.replace(/\D/g, "");
+  if (!digits) {
+    return null;
+  }
+  const n = Number.parseInt(digits, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 export function StocksManager({
   initialStocks,
   isAuthenticated,
@@ -790,6 +818,29 @@ export function StocksManager({
                 const rawDisplayName = localizedNames[stock.ticker] ?? stock.name;
                 const displayName = rawDisplayName.replace(/\s*\(.*?\)\s*$/, "");
 
+                const marketPrice = stock.quote?.marketPrice ?? null;
+                const stopThreshold = parseStopLossPriceThreshold(stock.memoStopLoss, stock.memoAvgPrice);
+                const targetPrice = stock.memoTargetPrice;
+                const hitStop =
+                  marketPrice != null && stopThreshold != null && marketPrice <= stopThreshold;
+                const hitTarget =
+                  marketPrice != null && targetPrice != null && marketPrice >= targetPrice;
+
+                let cardBorderColor: string;
+                let cardBoxShadow: string;
+                if (hitStop) {
+                  cardBorderColor = "#e5484d";
+                  cardBoxShadow = "0 0 0 1px rgba(229, 72, 77, 0.14)";
+                } else if (hitTarget) {
+                  cardBorderColor = "#5e6ad2";
+                  cardBoxShadow = "0 0 0 1px rgba(94, 106, 210, 0.18)";
+                } else {
+                  cardBorderColor = isHolding ? "#27a644" : "#23252a";
+                  cardBoxShadow = isHolding
+                    ? "0 0 0 1px rgba(39, 166, 68, 0.08)"
+                    : "0 0 0 1px rgba(255,255,255,0.01)";
+                }
+
                 return (
                   <article
                     key={stock.id}
@@ -802,12 +853,10 @@ export function StocksManager({
                         updateDrawerTicker(stock.ticker);
                       }
                     }}
-                    className="cursor-pointer rounded-[20px] border bg-[#141516] p-5 transition hover:-translate-y-0.5 hover:border-[#34343a] hover:bg-[#18191a] focus:outline-none focus:ring-1 focus:ring-[#5e6ad2]"
+                    className="cursor-pointer rounded-[20px] border bg-[#141516] p-5 transition hover:-translate-y-0.5 hover:bg-[#18191a] focus:outline-none focus:ring-1 focus:ring-[#5e6ad2]"
                     style={{
-                      borderColor: isHolding ? "#27a644" : "#23252a",
-                      boxShadow: isHolding
-                        ? "0 0 0 1px rgba(39, 166, 68, 0.08)"
-                        : "0 0 0 1px rgba(255,255,255,0.01)",
+                      borderColor: cardBorderColor,
+                      boxShadow: cardBoxShadow,
                     }}
                   >
                     <div className="flex h-full min-h-[248px] flex-col gap-3">

@@ -141,12 +141,35 @@ export default async function StocksPage({ searchParams }: StocksPageProps) {
       }
     }
 
-    const memoByStockId = new Map<string, { shares: number | null; avg_price: number | null }>();
+    const memoByStockId = new Map<
+      string,
+      {
+        shares: number | null;
+        avg_price: number | null;
+        stop_loss: string | null;
+        target_price: number | null;
+      }
+    >();
+
+    function normalizeMemoTargetPrice(value: unknown): number | null {
+      if (value == null) {
+        return null;
+      }
+      if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+        return Math.trunc(value);
+      }
+      const digits = String(value).replace(/\D/g, "");
+      if (!digits) {
+        return null;
+      }
+      const n = Number.parseInt(digits, 10);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    }
 
     if (stockIds.length > 0) {
       const { data: memoRows } = await supabase
         .from("memos")
-        .select("stock_id, shares, avg_price")
+        .select("stock_id, shares, avg_price, stop_loss, target_price")
         .in("stock_id", stockIds)
         .eq("user_id", user.id);
 
@@ -154,6 +177,8 @@ export default async function StocksPage({ searchParams }: StocksPageProps) {
         memoByStockId.set(row.stock_id, {
           shares: row.shares ?? null,
           avg_price: row.avg_price ?? null,
+          stop_loss: row.stop_loss ?? null,
+          target_price: normalizeMemoTargetPrice(row.target_price),
         });
       }
     }
@@ -170,6 +195,8 @@ export default async function StocksPage({ searchParams }: StocksPageProps) {
           quoteError,
           memoAvgPrice: memoRow?.avg_price ?? null,
           memoShares: memoRow?.shares ?? null,
+          memoStopLoss: memoRow?.stop_loss ?? null,
+          memoTargetPrice: memoRow?.target_price ?? null,
         };
       }),
     );

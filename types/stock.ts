@@ -31,6 +31,10 @@ export type StockDashboardItem = StockItem & {
   memoAvgPrice: number | null;
   /** memos.shares — 표시/분석용, 없으면 null */
   memoShares: number | null;
+  /** memos.stop_loss — 카드 손절선 비교용 원문 */
+  memoStopLoss: string | null;
+  /** memos.target_price — 카드 목표가 (정수, 서버에서 정규화) */
+  memoTargetPrice: number | null;
 };
 
 export type StockQuote = {
