@@ -10,25 +10,35 @@ function decodeHtml(value: string) {
     .replace(/&#39;/g, "'");
 }
 
-function parseNewsItems(xml: string) {
-  return (xml.match(/<item>([\s\S]*?)<\/item>/g) ?? [])
-    .slice(0, 5)
-    .map((item) => {
-      const titleMatch =
-        item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/i) ??
-        item.match(/<title>(.*?)<\/title>/i);
-      const linkMatch = item.match(/<link>(.*?)<\/link>/i);
-      const dateMatch = item.match(/<pubDate>(.*?)<\/pubDate>/i);
-      const sourceMatch = item.match(/<source[^>]*>(.*?)<\/source>/i);
+function parseNewsItems(xml: string): NewsItem[] {
+  const withPubMs = (xml.match(/<item>([\s\S]*?)<\/item>/g) ?? []).map((item) => {
+    const titleMatch =
+      item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/i) ??
+      item.match(/<title>(.*?)<\/title>/i);
+    const linkMatch = item.match(/<link>(.*?)<\/link>/i);
+    const dateMatch = item.match(/<pubDate>(.*?)<\/pubDate>/i);
+    const sourceMatch = item.match(/<source[^>]*>(.*?)<\/source>/i);
 
-      return {
-        title: decodeHtml((titleMatch?.[1] ?? "").replace(/\s*-\s*Google 뉴스\s*$/i, "").trim()),
-        link: decodeHtml((linkMatch?.[1] ?? "").trim()),
-        publishedAt: decodeHtml((dateMatch?.[1] ?? "").trim()),
-        source: decodeHtml((sourceMatch?.[1] ?? "").trim()) || "Google News",
-      };
-    })
-    .filter((item) => item.title && item.link);
+    const publishedAt = decodeHtml((dateMatch?.[1] ?? "").trim());
+
+    return {
+      title: decodeHtml((titleMatch?.[1] ?? "").replace(/\s*-\s*Google 뉴스\s*$/i, "").trim()),
+      link: decodeHtml((linkMatch?.[1] ?? "").trim()),
+      publishedAt,
+      source: decodeHtml((sourceMatch?.[1] ?? "").trim()) || "Google News",
+      pubMs: Date.parse(publishedAt),
+    };
+  });
+
+  const filtered = withPubMs.filter((item) => item.title && item.link);
+
+  filtered.sort((a, b) => {
+    const tb = Number.isFinite(b.pubMs) ? b.pubMs : 0;
+    const ta = Number.isFinite(a.pubMs) ? a.pubMs : 0;
+    return tb - ta;
+  });
+
+  return filtered.slice(0, 5).map(({ pubMs: _omit, ...news }) => news);
 }
 
 function getNewsQueries(name: string, ticker: string) {
@@ -63,7 +73,7 @@ export async function getStockNews({
 }): Promise<NewsItem[]> {
   for (const queryText of getNewsQueries(name, ticker)) {
     const query = encodeURIComponent(queryText);
-    const url = `https://news.google.com/rss/search?q=${query}&hl=ko&gl=KR&ceid=KR:ko`;
+    const url = `https://news.google.com/rss/search?q=${query}&hl=ko&gl=KR&ceid=KR:ko&sort=date`;
     const response = await fetch(url);
     const xml = await response.text();
 

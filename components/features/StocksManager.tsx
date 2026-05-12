@@ -110,7 +110,7 @@ export function StocksManager({
     ticker: string;
   } | null>(null);
   const [localizedNames, setLocalizedNames] = useState<Record<string, string>>({});
-  const [dashboardFilter, setDashboardFilter] = useState<DashboardFilter>("all");
+  const [dashboardFilter, setDashboardFilter] = useState<DashboardFilter>("holding");
   const [dashboardSort, setDashboardSort] = useState<DashboardSort>("change");
   const [isDashboardRefreshing, setIsDashboardRefreshing] = useState(false);
   const [isDrawerLoading, setIsDrawerLoading] = useState(false);
