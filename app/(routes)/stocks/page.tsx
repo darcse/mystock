@@ -1,6 +1,7 @@
 import { getDartDisclosures } from "@/lib/dart";
 import { getStockNews } from "@/lib/news";
 import { StocksManager } from "@/components/features/StocksManager";
+import { Footer } from "@/components/ui/Footer";
 import { MarketIndicesBar } from "@/components/ui/MarketIndicesBar";
 import { getMarketIndices, getStockChart, getStockDashboardQuote, getStockQuote } from "@/lib/yahoo";
 import { createClient } from "@/lib/supabase/server";
@@ -263,14 +264,17 @@ export default async function StocksPage({ searchParams }: StocksPageProps) {
   const portfolioSummary = user ? buildPortfolioSummary(stocks) : null;
 
   return (
-    <main className="min-h-screen bg-[#010102] px-4 py-10 md:px-8">
-      <StocksManager
-        initialStocks={stocks}
-        isAuthenticated={Boolean(user)}
-        marketIndicesBar={<MarketIndicesBar indices={marketIndices} />}
-        portfolioSummary={portfolioSummary}
-        selectedDetail={selectedDetail}
-      />
+    <main className="flex min-h-screen flex-col bg-[#010102] px-4 py-10 md:px-8">
+      <div className="flex min-h-0 flex-1 flex-col pb-14 md:pb-20">
+        <StocksManager
+          initialStocks={stocks}
+          isAuthenticated={Boolean(user)}
+          marketIndicesBar={<MarketIndicesBar indices={marketIndices} />}
+          portfolioSummary={portfolioSummary}
+          selectedDetail={selectedDetail}
+        />
+      </div>
+      <Footer isAuthenticated={Boolean(user)} />
     </main>
   );
 }

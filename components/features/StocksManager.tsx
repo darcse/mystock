@@ -2,9 +2,8 @@
 
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Loader2, LogOut, RefreshCw, X } from "lucide-react";
+import { Loader2, Plus, RefreshCw, X } from "lucide-react";
 import type { LookupState } from "@/app/(routes)/stocks/action-types";
-import { logoutAction } from "@/app/(routes)/login/actions";
 import {
   createStockAction,
   deleteStockAction,
@@ -117,6 +116,7 @@ export function StocksManager({
   const [isDrawerLoading, setIsDrawerLoading] = useState(false);
   const [isDrawerRefreshing, setIsDrawerRefreshing] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isAddStockPanelOpen, setIsAddStockPanelOpen] = useState(false);
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
   const [lookupState, lookupAction, isLookupPending] = useActionState(
     lookupStockAction,
@@ -356,6 +356,7 @@ export function StocksManager({
         setTicker("");
         setSelectedKrxStock(null);
         setSelectedStatus("watching");
+        setIsAddStockPanelOpen(false);
         router.refresh();
         return;
       }
@@ -371,6 +372,7 @@ export function StocksManager({
       setTicker("");
       setSelectedKrxStock(null);
       setSelectedStatus("watching");
+      setIsAddStockPanelOpen(false);
       router.refresh();
     });
   }
@@ -573,8 +575,32 @@ export function StocksManager({
               티커를 조회해 기업명과 시장 정보를 확인한 뒤 종목을 저장하고, 보유 상태와 삭제를 바로 관리할 수 있습니다.
             </p>
           </div>
-          {isAuthenticated ? (
-            <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              id="add-stock-toggle"
+              aria-expanded={isAddStockPanelOpen}
+              aria-controls="add-stock-panel"
+              onClick={() => setIsAddStockPanelOpen((open) => !open)}
+              className={`inline-flex h-10 items-center gap-2 rounded-[8px] border px-3 text-[14px] font-medium transition ${
+                isAddStockPanelOpen
+                  ? "border-[#5e6ad2] bg-[rgba(94,106,210,0.14)] text-[#d0d6e0] hover:bg-[rgba(94,106,210,0.22)]"
+                  : "border-[#23252a] bg-[#141516] text-[#f7f8f8] hover:border-[#5e6ad2]"
+              }`}
+            >
+              {isAddStockPanelOpen ? (
+                <>
+                  <X size={18} className="shrink-0 text-[#828fff]" aria-hidden />
+                  <span>닫기</span>
+                </>
+              ) : (
+                <>
+                  <Plus size={18} className="shrink-0" aria-hidden />
+                  <span>+ 종목 추가</span>
+                </>
+              )}
+            </button>
+            {isAuthenticated ? (
               <button
                 type="button"
                 aria-label="새로고침"
@@ -587,17 +613,8 @@ export function StocksManager({
                   <RefreshCw size={18} />
                 )}
               </button>
-              <form action={logoutAction}>
-                <button
-                  type="submit"
-                  aria-label="로그아웃"
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-[8px] border border-[#23252a] bg-[#141516] text-[#f7f8f8] transition hover:border-[#5e6ad2]"
-                >
-                  <LogOut size={18} />
-                </button>
-              </form>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
         {!isAuthenticated ? (
           <div className="rounded-[12px] border border-[#3e3e44] bg-[#141516] px-4 py-3 text-[13px] text-[#d0d6e0]">
@@ -606,11 +623,13 @@ export function StocksManager({
         ) : null}
       </header>
 
-      {marketIndicesBar}
-
-      <PortfolioSummary data={portfolioSummary} />
-
-      <div className="rounded-[16px] border border-[#23252a] bg-[#0f1011] p-5 text-[#f7f8f8]">
+      {isAddStockPanelOpen ? (
+      <div
+        id="add-stock-panel"
+        role="region"
+        aria-labelledby="add-stock-toggle"
+        className="rounded-[16px] border border-[#23252a] bg-[#0f1011] p-5 text-[#f7f8f8]"
+      >
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-end gap-3">
             <div className="relative flex min-w-[220px] flex-1 flex-col gap-2">
@@ -765,6 +784,17 @@ export function StocksManager({
           {feedback ? <p className="text-[13px] leading-6 text-[#d0d6e0]">{feedback}</p> : null}
         </div>
       </div>
+      ) : null}
+
+      {marketIndicesBar}
+
+      <PortfolioSummary data={portfolioSummary} />
+
+      {feedback && !isAddStockPanelOpen ? (
+        <p className="rounded-[12px] border border-[#23252a] bg-[#0f1011] px-4 py-3 text-[13px] leading-6 text-[#d0d6e0]">
+          {feedback}
+        </p>
+      ) : null}
 
       <div className="rounded-[16px] border border-[#23252a] bg-[#0f1011] p-5 text-[#f7f8f8]">
           <div className="mb-4 flex items-center justify-between">
